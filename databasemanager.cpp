@@ -5,7 +5,7 @@
 #include <QMessageBox>
 #include <QApplication>
 #include <QDir>
-#include <QSet>  // 添加缺少的头文件
+#include <QSet>
 
 DatabaseManager* DatabaseManager::m_instance = nullptr;
 

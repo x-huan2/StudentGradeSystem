@@ -88,12 +88,12 @@
             <widget class="QComboBox" name="comboCourse">
              <item>
               <property name="text">
-               <string>数学</string>
+               <string>语文</string>
               </property>
              </item>
              <item>
               <property name="text">
-               <string>语文</string>
+               <string>数学</string>
               </property>
              </item>
              <item>
@@ -108,7 +108,27 @@
              </item>
              <item>
               <property name="text">
+               <string>历史</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
                <string>化学</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>生物</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>地理</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>政治</string>
               </property>
              </item>
             </widget>
