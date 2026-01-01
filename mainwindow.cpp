@@ -15,6 +15,7 @@
 #include <QPainter>
 #include <QTextDocument>
 #include <QDateTimeAxis>
+#include <QDateTime>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -135,10 +136,16 @@ void MainWindow::showDefaultCharts()
     if (m_scoreModel->rowCount() == 0) {
         // 显示空图表提示
         QChart *emptyChart = new QChart();
-        emptyChart->setTitle("暂无数据");
+        emptyChart->setTitle("暂无数据，请先添加成绩记录");
         ui->chartViewHistogram->setChart(emptyChart);
-        ui->chartViewTrend->setChart(emptyChart);
-        ui->chartViewComparison->setChart(emptyChart);
+
+        QChart *emptyTrendChart = new QChart();
+        emptyTrendChart->setTitle("暂无数据，请先添加成绩记录");
+        ui->chartViewTrend->setChart(emptyTrendChart);
+
+        QChart *emptyComparisonChart = new QChart();
+        emptyComparisonChart->setTitle("暂无数据，请先添加成绩记录");
+        ui->chartViewComparison->setChart(emptyComparisonChart);
         return;
     }
 
@@ -461,39 +468,40 @@ void MainWindow::on_btnCalculateStats_clicked()
 
 void MainWindow::showHistogramChart(const QString &className, const QString &course)
 {
+    // 从数据库获取实际的成绩分布数据
+    QList<QMap<QString, QVariant>> distribution = DatabaseManager::instance()->getScoreDistribution(
+        className == "所有班级" ? "" : className,
+        course == "所有课程" ? "" : course,
+        5  // 使用5个区间
+        );
+
+    if (distribution.isEmpty()) {
+        // 如果没有数据，显示空图表
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle("暂无数据");
+        ui->chartViewHistogram->setChart(emptyChart);
+        return;
+    }
+
     // 创建柱状图
     QChart *chart = new QChart();
     chart->setTitle(QString("成绩分布 - %1 %2").arg(className).arg(course));
 
     QBarSeries *series = new QBarSeries();
-
-    // 模拟数据
-    QStringList categories;
-    categories << "0-59" << "60-69" << "70-79" << "80-89" << "90-100";
-
     QBarSet *set = new QBarSet("人数分布");
 
-    // 根据统计结果生成模拟数据
-    QMap<QString, QVariant> stats = DatabaseManager::instance()->calculateStatistics(
-        className == "所有班级" ? "" : className,
-        course == "所有课程" ? "" : course
-        );
+    // 提取区间标签和人数
+    QStringList categories;
+    QVector<int> counts;
 
-    int count = stats["count"].toInt();
-    if (count > 0) {
-        double avg = stats["avg"].toDouble();
-        // 基于平均分生成模拟分布
-        if (avg >= 85) {
-            *set << 2 << 3 << 5 << 8 << 12;  // 优秀分布
-        } else if (avg >= 75) {
-            *set << 3 << 5 << 8 << 6 << 3;   // 良好分布
-        } else if (avg >= 60) {
-            *set << 5 << 8 << 6 << 3 << 1;   // 中等分布
-        } else {
-            *set << 10 << 5 << 3 << 1 << 0;  // 较差分布
-        }
-    } else {
-        *set << 0 << 0 << 0 << 0 << 0;
+    for (const auto &bin : distribution) {
+        categories << bin["range"].toString();
+        counts << bin["count"].toInt();
+    }
+
+    // 添加数据到柱状图
+    for (int count : counts) {
+        *set << count;
     }
 
     series->append(set);
@@ -502,15 +510,26 @@ void MainWindow::showHistogramChart(const QString &className, const QString &cou
     // 设置X轴
     QBarCategoryAxis *axisX = new QBarCategoryAxis();
     axisX->append(categories);
+    axisX->setTitleText("成绩区间");
     chart->addAxis(axisX, Qt::AlignBottom);
     series->attachAxis(axisX);
 
     // 设置Y轴
     QValueAxis *axisY = new QValueAxis();
     axisY->setTitleText("人数");
+    axisY->setLabelFormat("%d");
+
+    // 设置Y轴范围，让最大值稍大一些以便显示
+    int maxCount = 0;
+    for (int count : counts) {
+        if (count > maxCount) maxCount = count;
+    }
+    axisY->setRange(0, maxCount + 1);
+
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
 
+    // 显示图例
     chart->legend()->setVisible(true);
     chart->legend()->setAlignment(Qt::AlignBottom);
 
@@ -519,68 +538,156 @@ void MainWindow::showHistogramChart(const QString &className, const QString &cou
 
 void MainWindow::showTrendChart(const QString &className, const QString &course)
 {
+    // 检查是否选择了课程
+    if (course == "所有课程" || course.isEmpty()) {
+        // 如果没有选择具体课程，显示提示信息
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle("请选择具体课程查看成绩趋势");
+        ui->chartViewTrend->setChart(emptyChart);
+        return;
+    }
+
+    // 从数据库获取课程平均成绩趋势数据
+    QList<QMap<QString, QVariant>> trendData = DatabaseManager::instance()->getCourseTrendData(
+        className == "所有班级" ? "" : className,
+        course
+        );
+
+    if (trendData.isEmpty()) {
+        // 如果没有数据，显示空图表
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle(QString("暂无 %1 的成绩趋势数据").arg(course));
+        ui->chartViewTrend->setChart(emptyChart);
+        return;
+    }
+
+    // 创建图表
     QChart *chart = new QChart();
-    chart->setTitle(QString("成绩趋势 - %1 %2").arg(className).arg(course));
+    chart->setTitle(QString("%1 成绩趋势 - %2").arg(course).arg(className));
 
+    // 创建折线系列
     QLineSeries *series = new QLineSeries();
-    series->setName("平均分趋势");
+    series->setName(course);
 
-    // 模拟趋势数据
-    series->append(1, 75);
-    series->append(2, 78);
-    series->append(3, 82);
-    series->append(4, 80);
-    series->append(5, 85);
+    // 添加数据点到系列
+    for (const auto &dataPoint : trendData) {
+        QDate examDate = dataPoint["date_obj"].toDate();
+        double avgScore = dataPoint["score"].toDouble();
+        int count = dataPoint["count"].toInt();
+
+        // 将QDate转换为QDateTime（时间为午夜）
+        QDateTime dateTime(examDate, QTime(12, 0)); // 使用中午12点，避免时区问题
+
+        // 添加数据点
+        series->append(dateTime.toMSecsSinceEpoch(), avgScore);
+
+        qDebug() << "趋势数据点:" << examDate.toString("yyyy-MM-dd") << "平均分:" << avgScore << "人数:" << count;
+    }
 
     chart->addSeries(series);
 
-    QValueAxis *axisX = new QValueAxis();
-    axisX->setTitleText("考试次数");
-    axisX->setLabelFormat("%d");
+    // 创建日期时间轴
+    QDateTimeAxis *axisX = new QDateTimeAxis();
+    axisX->setTitleText("考试时间");
+    axisX->setFormat("yyyy-MM-dd");
+
+    // 设置X轴范围
+    if (!trendData.isEmpty()) {
+        QDate firstDate = trendData.first()["date_obj"].toDate();
+        QDate lastDate = trendData.last()["date_obj"].toDate();
+
+        // 添加一些边距
+        QDateTime minDate(firstDate.addDays(-1), QTime(0, 0));
+        QDateTime maxDate(lastDate.addDays(1), QTime(0, 0));
+
+        axisX->setRange(minDate, maxDate);
+    }
+
     chart->addAxis(axisX, Qt::AlignBottom);
     series->attachAxis(axisX);
 
+    // 创建Y轴
     QValueAxis *axisY = new QValueAxis();
     axisY->setTitleText("平均成绩");
+    axisY->setLabelFormat("%.1f");
+
+    // 设置Y轴范围
+    double minScore = 100, maxScore = 0;
+    for (const auto &dataPoint : trendData) {
+        double score = dataPoint["score"].toDouble();
+        if (score < minScore) minScore = score;
+        if (score > maxScore) maxScore = score;
+    }
+
+    // 添加一些边距
+    axisY->setRange(std::max(0.0, minScore - 5), std::min(100.0, maxScore + 5));
+
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
+
+    // 设置图表动画
+    chart->setAnimationOptions(QChart::SeriesAnimations);
+
+    // 显示图例
+    chart->legend()->setVisible(true);
+    chart->legend()->setAlignment(Qt::AlignBottom);
 
     ui->chartViewTrend->setChart(chart);
 }
 
 void MainWindow::showComparisonChart(const QString &className)
 {
+    // 从数据库获取实际课程对比数据
+    QList<QMap<QString, QVariant>> comparisonData = DatabaseManager::instance()->getCourseComparison(
+        className == "所有班级" ? "" : className
+        );
+
+    if (comparisonData.isEmpty()) {
+        // 如果没有数据，显示空图表
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle("暂无数据");
+        ui->chartViewComparison->setChart(emptyChart);
+        return;
+    }
+
     QChart *chart = new QChart();
-    chart->setTitle(QString("课程对比 - %1").arg(className));
+    chart->setTitle(QString("课程平均分对比 - %1").arg(className));
 
-    QPieSeries *series = new QPieSeries();
+    // 使用柱状图显示课程对比
+    QBarSeries *series = new QBarSeries();
 
-    // 获取所有课程
-    QStringList courses = DatabaseManager::instance()->getAllCourses();
-    courses.removeAll("所有课程");
+    // 创建柱状图数据
+    QBarSet *set = new QBarSet("平均分");
 
-    // 为每个课程计算平均分
-    for (const QString &course : courses) {
-        QMap<QString, QVariant> stats = DatabaseManager::instance()->calculateStatistics(
-            className == "所有班级" ? "" : className,
-            course
-            );
+    QStringList categories;
+    for (const auto &courseData : comparisonData) {
+        QString course = courseData["course"].toString();
+        double avgScore = courseData["avg_score"].toDouble();
 
-        double avg = stats["avg"].toDouble();
-        if (avg > 0) {
-            series->append(course, avg);
-        }
+        categories << course;
+        *set << avgScore;
     }
 
-    // 设置扇区标签
-    for (QPieSlice *slice : series->slices()) {
-        slice->setLabelVisible();
-        slice->setLabel(QString("%1\n%2分").arg(slice->label()).arg(slice->value()));
-    }
-
+    series->append(set);
     chart->addSeries(series);
+
+    // 设置X轴
+    QBarCategoryAxis *axisX = new QBarCategoryAxis();
+    axisX->append(categories);
+    axisX->setTitleText("课程");
+    chart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    // 设置Y轴
+    QValueAxis *axisY = new QValueAxis();
+    axisY->setTitleText("平均分");
+    axisY->setRange(0, 100); // 成绩范围0-100
+    chart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    // 显示图例
     chart->legend()->setVisible(true);
-    chart->legend()->setAlignment(Qt::AlignRight);
+    chart->legend()->setAlignment(Qt::AlignBottom);
 
     ui->chartViewComparison->setChart(chart);
 }

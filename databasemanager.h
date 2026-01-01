@@ -39,8 +39,9 @@ public:
 
     // 统计功能
     QMap<QString, QVariant> calculateStatistics(const QString& className, const QString& course);
-    QList<QMap<QString, QVariant>> getScoreDistribution(const QString& className, const QString& course, int bins = 10);
+    QList<QMap<QString, QVariant>> getScoreDistribution(const QString& className, const QString& course, int bins = 5);
     QList<QMap<QString, QVariant>> getTrendData(const QString& studentId, const QString& course);
+    QList<QMap<QString, QVariant>> getCourseTrendData(const QString& className, const QString& course); // 新增函数
     QList<QMap<QString, QVariant>> getCourseComparison(const QString& className);
 
     // 获取唯一值列表
@@ -65,7 +66,6 @@ private:
     static DatabaseManager* m_instance;
     QSqlDatabase m_database;
     bool createTables();
-    bool insertSampleData();
 };
 
 #endif // DATABASEMANAGER_H

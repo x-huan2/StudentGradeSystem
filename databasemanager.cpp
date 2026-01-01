@@ -14,7 +14,7 @@ DatabaseManager::DatabaseManager(QObject *parent) : QObject(parent)
     QString dbPath = "C:/Users/bill/Desktop/student_scores/student_scores.db";
 
     // 确保桌面目录存在
-    QDir desktopDir("C:/Users/bill/Desktop");
+    QDir desktopDir("C:/Users/bill/Desktop/student_scores");
     if (!desktopDir.exists()) {
         qDebug() << "桌面目录不存在，尝试创建...";
         if (!desktopDir.mkpath(".")) {
@@ -313,6 +313,221 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
     return stats;
 }
 
+QList<QMap<QString, QVariant>> DatabaseManager::getScoreDistribution(const QString &className, const QString &course, int bins)
+{
+    QList<QMap<QString, QVariant>> distribution;
+
+    if (bins <= 0) bins = 5;
+
+    // 定义分数段
+    QVector<QPair<double, double>> scoreRanges;
+    QVector<QString> rangeLabels;
+
+    if (bins == 5) {
+        // 使用5个固定区间：0-59, 60-69, 70-79, 80-89, 90-100
+        scoreRanges = {
+            {0, 59.99}, {60, 69.99}, {70, 79.99}, {80, 89.99}, {90, 100}
+        };
+        rangeLabels = {"0-59", "60-69", "70-79", "80-89", "90-100"};
+    } else {
+        // 使用动态区间
+        double rangeSize = 100.0 / bins;
+        for (int i = 0; i < bins; i++) {
+            double lower = i * rangeSize;
+            double upper = (i + 1) * rangeSize;
+            if (i == bins - 1) upper = 100.0; // 最后一个区间包含100
+            scoreRanges.append({lower, upper});
+            rangeLabels.append(QString("%1-%2").arg(lower, 0, 'f', 1).arg(upper, 0, 'f', 1));
+        }
+    }
+
+    // 构建SQL查询
+    QString sql = "SELECT score FROM scores WHERE 1=1";
+
+    if (!className.isEmpty() && className != "所有班级") {
+        sql += " AND class_name = :class_name";
+    }
+    if (!course.isEmpty() && course != "所有课程") {
+        sql += " AND course = :course";
+    }
+
+    QSqlQuery query(m_database);
+    query.prepare(sql);
+
+    if (!className.isEmpty() && className != "所有班级") {
+        query.bindValue(":class_name", className);
+    }
+    if (!course.isEmpty() && course != "所有课程") {
+        query.bindValue(":course", course);
+    }
+
+    // 初始化统计数组
+    QVector<int> counts(scoreRanges.size(), 0);
+    int total = 0;
+
+    if (query.exec()) {
+        while (query.next()) {
+            double score = query.value(0).toDouble();
+            total++;
+
+            // 查找分数所在的区间
+            for (int i = 0; i < scoreRanges.size(); i++) {
+                if (score >= scoreRanges[i].first && score <= scoreRanges[i].second) {
+                    counts[i]++;
+                    break;
+                }
+            }
+        }
+
+        // 构建返回结果
+        for (int i = 0; i < scoreRanges.size(); i++) {
+            QMap<QString, QVariant> binData;
+            binData["range"] = rangeLabels[i];
+            binData["count"] = counts[i];
+            binData["percentage"] = total > 0 ? (counts[i] * 100.0 / total) : 0.0;
+            binData["lower"] = scoreRanges[i].first;
+            binData["upper"] = scoreRanges[i].second;
+            distribution.append(binData);
+        }
+    } else {
+        qDebug() << "获取成绩分布错误:" << query.lastError().text();
+    }
+
+    qDebug() << "成绩分布统计完成，共" << total << "条记录，" << bins << "个区间";
+    return distribution;
+}
+
+QList<QMap<QString, QVariant>> DatabaseManager::getTrendData(const QString &studentId, const QString &course)
+{
+    QList<QMap<QString, QVariant>> trendData;
+
+    QString sql = "SELECT exam_date, score FROM scores WHERE 1=1";
+
+    if (!studentId.isEmpty()) {
+        sql += " AND student_id = :student_id";
+    }
+    if (!course.isEmpty() && course != "所有课程") {
+        sql += " AND course = :course";
+    }
+
+    sql += " ORDER BY exam_date ASC";
+
+    QSqlQuery query(m_database);
+    query.prepare(sql);
+
+    if (!studentId.isEmpty()) {
+        query.bindValue(":student_id", studentId);
+    }
+    if (!course.isEmpty() && course != "所有课程") {
+        query.bindValue(":course", course);
+    }
+
+    if (query.exec()) {
+        while (query.next()) {
+            QMap<QString, QVariant> dataPoint;
+            QDate examDate = QDate::fromString(query.value(0).toString(), "yyyy-MM-dd");
+            double score = query.value(1).toDouble();
+
+            dataPoint["date"] = examDate.toString("yyyy-MM-dd");
+            dataPoint["score"] = score;
+            dataPoint["date_obj"] = examDate;
+
+            trendData.append(dataPoint);
+        }
+    } else {
+        qDebug() << "获取趋势数据错误:" << query.lastError().text();
+    }
+
+    return trendData;
+}
+
+// 新增函数：获取班级课程平均成绩趋势（按考试时间）
+QList<QMap<QString, QVariant>> DatabaseManager::getCourseTrendData(const QString &className, const QString &course)
+{
+    QList<QMap<QString, QVariant>> trendData;
+
+    QString sql = "SELECT exam_date, AVG(score) as avg_score, COUNT(*) as count FROM scores WHERE 1=1";
+
+    if (!className.isEmpty() && className != "所有班级") {
+        sql += " AND class_name = :class_name";
+    }
+    if (!course.isEmpty() && course != "所有课程") {
+        sql += " AND course = :course";
+    }
+
+    sql += " GROUP BY exam_date ORDER BY exam_date ASC";
+
+    QSqlQuery query(m_database);
+    query.prepare(sql);
+
+    if (!className.isEmpty() && className != "所有班级") {
+        query.bindValue(":class_name", className);
+    }
+    if (!course.isEmpty() && course != "所有课程") {
+        query.bindValue(":course", course);
+    }
+
+    if (query.exec()) {
+        while (query.next()) {
+            QMap<QString, QVariant> dataPoint;
+            QDate examDate = QDate::fromString(query.value(0).toString(), "yyyy-MM-dd");
+            double avgScore = query.value(1).toDouble();
+            int count = query.value(2).toInt();
+
+            dataPoint["date"] = examDate.toString("yyyy-MM-dd");
+            dataPoint["score"] = avgScore;
+            dataPoint["date_obj"] = examDate;
+            dataPoint["count"] = count;
+
+            trendData.append(dataPoint);
+        }
+        qDebug() << "获取课程趋势数据成功，共" << trendData.size() << "条记录";
+    } else {
+        qDebug() << "获取课程趋势数据错误:" << query.lastError().text();
+    }
+
+    return trendData;
+}
+
+QList<QMap<QString, QVariant>> DatabaseManager::getCourseComparison(const QString &className)
+{
+    QList<QMap<QString, QVariant>> comparisonData;
+
+    QString sql = "SELECT course, AVG(score) as avg_score, COUNT(*) as count FROM scores WHERE 1=1";
+
+    if (!className.isEmpty() && className != "所有班级") {
+        sql += " AND class_name = :class_name";
+    }
+
+    sql += " GROUP BY course ORDER BY avg_score DESC";
+
+    QSqlQuery query(m_database);
+    query.prepare(sql);
+
+    if (!className.isEmpty() && className != "所有班级") {
+        query.bindValue(":class_name", className);
+    }
+
+    if (query.exec()) {
+        while (query.next()) {
+            QMap<QString, QVariant> courseData;
+            QString course = query.value(0).toString();
+            double avgScore = query.value(1).toDouble();
+            int count = query.value(2).toInt();
+
+            courseData["course"] = course;
+            courseData["avg_score"] = avgScore;
+            courseData["count"] = count;
+
+            comparisonData.append(courseData);
+        }
+    } else {
+        qDebug() << "获取课程对比数据错误:" << query.lastError().text();
+    }
+
+    return comparisonData;
+}
+
 QStringList DatabaseManager::getAllClasses()
 {
     QStringList classes;
@@ -449,26 +664,4 @@ bool DatabaseManager::isDatabaseConnected() const
 QString DatabaseManager::getDatabasePath() const
 {
     return m_database.databaseName();
-}
-
-// 这些函数暂时返回空列表，以后可以扩展
-QList<QMap<QString, QVariant>> DatabaseManager::getScoreDistribution(const QString& className, const QString& course, int bins)
-{
-    Q_UNUSED(className);
-    Q_UNUSED(course);
-    Q_UNUSED(bins);
-    return QList<QMap<QString, QVariant>>();
-}
-
-QList<QMap<QString, QVariant>> DatabaseManager::getTrendData(const QString& studentId, const QString& course)
-{
-    Q_UNUSED(studentId);
-    Q_UNUSED(course);
-    return QList<QMap<QString, QVariant>>();
-}
-
-QList<QMap<QString, QVariant>> DatabaseManager::getCourseComparison(const QString& className)
-{
-    Q_UNUSED(className);
-    return QList<QMap<QString, QVariant>>();
 }
