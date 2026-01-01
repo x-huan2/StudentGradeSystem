@@ -168,7 +168,7 @@ void MainWindow::showDefaultCharts()
     ui->chartViewHistogram->setChart(histogramChart);
 }
 
-// ==================== 修改：日期筛选槽函数改为下拉框 ====================
+
 
 void MainWindow::on_comboFilterDate_currentTextChanged(const QString &text)
 {
@@ -182,7 +182,6 @@ void MainWindow::on_comboStatsDate_currentTextChanged(const QString &text)
     updateStatisticsFilter();
 }
 
-// ==================== 修改：更新筛选函数 ====================
 
 void MainWindow::updateDataFilter()
 {
@@ -214,7 +213,6 @@ void MainWindow::updateStatisticsFilter()
     // 统计筛选无需特殊处理，只更新UI
 }
 
-// ==================== 修改：刷新筛选下拉框函数 ====================
 
 void MainWindow::refreshFilterCombos()
 {
