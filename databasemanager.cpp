@@ -11,10 +11,10 @@ DatabaseManager* DatabaseManager::m_instance = nullptr;
 DatabaseManager::DatabaseManager(QObject *parent) : QObject(parent)
 {
     // 设置数据库文件路径
-    QString dbPath = "C:/Users/bill/Desktop/student_scores/student_scores.db";
+    QString dbPath = "C:/Users/bill/Desktop/student_scores.db";
 
     // 确保桌面目录存在
-    QDir desktopDir("C:/Users/bill/Desktop/student_scores");
+    QDir desktopDir("C:/Users/bill/Desktop");
     if (!desktopDir.exists()) {
         qDebug() << "桌面目录不存在，尝试创建...";
         if (!desktopDir.mkpath(".")) {
@@ -441,18 +441,38 @@ QList<QMap<QString, QVariant>> DatabaseManager::getTrendData(const QString &stud
     return trendData;
 }
 
-// 新增函数：获取班级课程平均成绩趋势（按考试时间）
+// 获取课程趋势数据（按考试日期分组，使用 DISTINCT 确保日期唯一）
 QList<QMap<QString, QVariant>> DatabaseManager::getCourseTrendData(const QString &className, const QString &course)
 {
     QList<QMap<QString, QVariant>> trendData;
 
-    QString sql = "SELECT exam_date, AVG(score) as avg_score, COUNT(*) as count FROM scores WHERE 1=1";
+    QString sql = "SELECT DISTINCT exam_date, "
+                  "(SELECT AVG(score) FROM scores s2 WHERE s2.exam_date = s1.exam_date ";
 
     if (!className.isEmpty() && className != "所有班级") {
-        sql += " AND class_name = :class_name";
+        sql += " AND s2.class_name = :class_name";
     }
     if (!course.isEmpty() && course != "所有课程") {
-        sql += " AND course = :course";
+        sql += " AND s2.course = :course";
+    }
+    sql += ") as avg_score, ";
+
+    sql += "(SELECT COUNT(*) FROM scores s3 WHERE s3.exam_date = s1.exam_date ";
+    if (!className.isEmpty() && className != "所有班级") {
+        sql += " AND s3.class_name = :class_name2";
+    }
+    if (!course.isEmpty() && course != "所有课程") {
+        sql += " AND s3.course = :course2";
+    }
+    sql += ") as count ";
+
+    sql += "FROM scores s1 WHERE 1=1";
+
+    if (!className.isEmpty() && className != "所有班级") {
+        sql += " AND s1.class_name = :class_name3";
+    }
+    if (!course.isEmpty() && course != "所有课程") {
+        sql += " AND s1.course = :course3";
     }
 
     sql += " GROUP BY exam_date ORDER BY exam_date ASC";
@@ -462,26 +482,38 @@ QList<QMap<QString, QVariant>> DatabaseManager::getCourseTrendData(const QString
 
     if (!className.isEmpty() && className != "所有班级") {
         query.bindValue(":class_name", className);
+        query.bindValue(":class_name2", className);
+        query.bindValue(":class_name3", className);
     }
     if (!course.isEmpty() && course != "所有课程") {
         query.bindValue(":course", course);
+        query.bindValue(":course2", course);
+        query.bindValue(":course3", course);
     }
 
     if (query.exec()) {
+        QSet<QString> uniqueDates; // 用于检查日期唯一性
         while (query.next()) {
-            QMap<QString, QVariant> dataPoint;
             QDate examDate = QDate::fromString(query.value(0).toString(), "yyyy-MM-dd");
             double avgScore = query.value(1).toDouble();
             int count = query.value(2).toInt();
 
-            dataPoint["date"] = examDate.toString("yyyy-MM-dd");
-            dataPoint["score"] = avgScore;
-            dataPoint["date_obj"] = examDate;
-            dataPoint["count"] = count;
+            QString dateStr = examDate.toString("yyyy-MM-dd");
 
-            trendData.append(dataPoint);
+            // 检查日期是否已存在
+            if (!uniqueDates.contains(dateStr) && avgScore > 0) {
+                uniqueDates.insert(dateStr);
+
+                QMap<QString, QVariant> dataPoint;
+                dataPoint["date"] = dateStr;
+                dataPoint["score"] = avgScore;
+                dataPoint["date_obj"] = examDate;
+                dataPoint["count"] = count;
+
+                trendData.append(dataPoint);
+            }
         }
-        qDebug() << "获取课程趋势数据成功，共" << trendData.size() << "条记录";
+        qDebug() << "获取课程趋势数据成功，共" << trendData.size() << "条唯一记录";
     } else {
         qDebug() << "获取课程趋势数据错误:" << query.lastError().text();
     }

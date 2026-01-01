@@ -75,7 +75,7 @@ void MainWindow::setupUI()
 void MainWindow::setupDatabase()
 {
     // 直接连接到指定数据库文件
-    QString dbPath = "C:/Users/bill/Desktop/student_scores/student_scores.db";
+    QString dbPath = "C:/Users/bill/Desktop/student_scores.db";
 
     // 检查数据库文件是否存在
     QFileInfo dbFile(dbPath);
@@ -561,6 +561,8 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
         return;
     }
 
+    qDebug() << "趋势数据点数量:" << trendData.size();
+
     // 创建图表
     QChart *chart = new QChart();
     chart->setTitle(QString("%1 成绩趋势 - %2").arg(course).arg(className));
@@ -568,41 +570,42 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
     // 创建折线系列
     QLineSeries *series = new QLineSeries();
     series->setName(course);
+    series->setPointsVisible(true); // 显示数据点
+    series->setPointLabelsVisible(true); // 显示数据点标签
+    series->setPointLabelsFormat("@yPoint"); // 标签格式为Y值
 
-    // 添加数据点到系列
+    // 使用QBarCategoryAxis来显示日期作为分类
+    QStringList dateCategories;
+    QVector<double> scores;
+
+    // 添加数据点到系列，同时收集日期和分数
     for (const auto &dataPoint : trendData) {
         QDate examDate = dataPoint["date_obj"].toDate();
         double avgScore = dataPoint["score"].toDouble();
         int count = dataPoint["count"].toInt();
 
-        // 将QDate转换为QDateTime（时间为午夜）
-        QDateTime dateTime(examDate, QTime(12, 0)); // 使用中午12点，避免时区问题
+        // 添加日期到分类列表
+        dateCategories << examDate.toString("MM-dd");
 
-        // 添加数据点
-        series->append(dateTime.toMSecsSinceEpoch(), avgScore);
+        // 添加分数
+        scores << avgScore;
 
-        qDebug() << "趋势数据点:" << examDate.toString("yyyy-MM-dd") << "平均分:" << avgScore << "人数:" << count;
+        // 添加数据点到系列 - 使用索引作为X值
+        int index = dateCategories.size() - 1;
+        series->append(index, avgScore);
+
+        qDebug() << "趋势数据点[" << index << "]:" << examDate.toString("yyyy-MM-dd")
+                 << "平均分:" << avgScore << "人数:" << count;
     }
 
     chart->addSeries(series);
 
-    // 创建日期时间轴
-    QDateTimeAxis *axisX = new QDateTimeAxis();
-    axisX->setTitleText("考试时间");
-    axisX->setFormat("yyyy-MM-dd");
+    // 创建分类轴作为X轴
+    QBarCategoryAxis *axisX = new QBarCategoryAxis();
+    axisX->append(dateCategories);
+    axisX->setTitleText("考试日期");
 
     // 设置X轴范围
-    if (!trendData.isEmpty()) {
-        QDate firstDate = trendData.first()["date_obj"].toDate();
-        QDate lastDate = trendData.last()["date_obj"].toDate();
-
-        // 添加一些边距
-        QDateTime minDate(firstDate.addDays(-1), QTime(0, 0));
-        QDateTime maxDate(lastDate.addDays(1), QTime(0, 0));
-
-        axisX->setRange(minDate, maxDate);
-    }
-
     chart->addAxis(axisX, Qt::AlignBottom);
     series->attachAxis(axisX);
 
@@ -613,14 +616,24 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
 
     // 设置Y轴范围
     double minScore = 100, maxScore = 0;
-    for (const auto &dataPoint : trendData) {
-        double score = dataPoint["score"].toDouble();
+    for (double score : scores) {
         if (score < minScore) minScore = score;
         if (score > maxScore) maxScore = score;
     }
 
     // 添加一些边距
-    axisY->setRange(std::max(0.0, minScore - 5), std::min(100.0, maxScore + 5));
+    double yMin = std::max(0.0, minScore - 5);
+    double yMax = std::min(100.0, maxScore + 5);
+
+    // 如果所有分数相同，调整范围
+    if (qFuzzyCompare(minScore, maxScore)) {
+        yMin = std::max(0.0, minScore - 10);
+        yMax = std::min(100.0, maxScore + 10);
+    }
+
+    axisY->setRange(yMin, yMax);
+
+    qDebug() << "Y轴范围:" << yMin << "到" << yMax;
 
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
@@ -631,6 +644,9 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
     // 显示图例
     chart->legend()->setVisible(true);
     chart->legend()->setAlignment(Qt::AlignBottom);
+
+    // 设置图表主题
+    chart->setTheme(QChart::ChartThemeLight);
 
     ui->chartViewTrend->setChart(chart);
 }
