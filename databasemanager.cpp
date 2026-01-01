@@ -190,7 +190,6 @@ QList<StudentScore> DatabaseManager::getAllScores()
     return scores;
 }
 
-// 修改：简化筛选功能，只保留日期参数（具体日期点）
 QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className, const QString &course,
                                                        const QString &examDate, const QString &keyword)
 {
@@ -254,7 +253,6 @@ QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className,
     return scores;
 }
 
-// 修改：简化统计功能，只保留日期参数（具体日期点）
 QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &className, const QString &course,
                                                              const QString &examDate)
 {
@@ -645,7 +643,7 @@ QStringList DatabaseManager::getAllStudents()
     return students;
 }
 
-// 导入导出函数（注意：这些函数在databasemanager.h中已声明）
+// 导入导出函数
 bool DatabaseManager::importFromCSV(const QString &filePath)
 {
     QFile file(filePath);
