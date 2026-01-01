@@ -151,11 +151,11 @@ void MainWindow::showDefaultCharts()
 
     // 显示默认的柱状图
     QChart *histogramChart = new QChart();
-    histogramChart->setTitle("成绩分布");
+    histogramChart->setTitle("成绩分布 (示例)");
     QBarSeries *series = new QBarSeries();
-    // QBarSet *set = new QBarSet("示例数据");
-    // *set << 5 << 10 << 15 << 8 << 12;
-    // series->append(set);
+    QBarSet *set = new QBarSet("示例数据");
+    *set << 5 << 10 << 15 << 8 << 12;
+    series->append(set);
     histogramChart->addSeries(series);
 
     QBarCategoryAxis *axisX = new QBarCategoryAxis();
@@ -258,7 +258,8 @@ void MainWindow::on_actionAbout_triggered()
     QMessageBox::about(this, "关于学生成绩与分析系统",
                        "<h2>学生成绩与分析系统</h2>"
                        "<p>版本: 1.0.0</p>"
-                       "<p>开发: 慕容显欢-2023414290427</p>");
+                       "<p>数据库路径: C:/Users/bill/Desktop/student_scores.db</p>"
+                       "<p>开发: 慕容显欢 2023414290427</p>");
 }
 
 // ==================== 原有的按钮槽函数 ====================
