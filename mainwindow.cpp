@@ -3,7 +3,7 @@
 #include "databasemanager.h"
 #include <QMessageBox>
 #include <QFileDialog>
-#include <QDesktopServices>
+#include <QStandardItemModel>
 #include <QChartView>
 #include <QBarSeries>
 #include <QBarSet>
@@ -11,10 +11,10 @@
 #include <QBarCategoryAxis>
 #include <QValueAxis>
 #include <QPieSeries>
-#include <QDateTimeAxis>
-#include <QPrinter>  // 添加QPrinter头文件
+#include <QPrinter>
 #include <QPainter>
 #include <QTextDocument>
+#include <QDateTimeAxis>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -23,8 +23,13 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
 
+    // 先设置UI
     setupUI();
+
+    // 然后初始化数据库
     setupDatabase();
+
+    // 最后设置图表
     setupCharts();
 }
 
@@ -61,17 +66,25 @@ void MainWindow::setupUI()
 
     // 初始刷新
     refreshFilterCombos();
-    m_scoreModel->refreshData();
+
+    // 显示初始记录数
     ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
 }
 
 void MainWindow::setupDatabase()
 {
     if (DatabaseManager::instance()->initializeDatabase()) {
-        updateStatusBar("数据库连接成功");
+        QString dbPath = DatabaseManager::instance()->getDatabasePath();
+        updateStatusBar(QString("数据库连接成功 - 路径: %1").arg(dbPath));
+
+        // 刷新数据模型
+        m_scoreModel->refreshData();
+        ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
+
+        qDebug() << "Database initialized and data loaded successfully";
     } else {
         updateStatusBar("数据库连接失败");
-        QMessageBox::warning(this, "错误", "无法连接数据库");
+        QMessageBox::critical(this, "错误", "无法连接数据库，请检查数据库配置");
     }
 }
 
@@ -81,6 +94,33 @@ void MainWindow::setupCharts()
     ui->chartViewHistogram->setRenderHint(QPainter::Antialiasing);
     ui->chartViewTrend->setRenderHint(QPainter::Antialiasing);
     ui->chartViewComparison->setRenderHint(QPainter::Antialiasing);
+
+    // 设置默认图表
+    showDefaultCharts();
+}
+
+void MainWindow::showDefaultCharts()
+{
+    // 显示默认的柱状图
+    QChart *histogramChart = new QChart();
+    histogramChart->setTitle("成绩分布 (示例)");
+    QBarSeries *series = new QBarSeries();
+    QBarSet *set = new QBarSet("示例数据");
+    *set << 5 << 10 << 15 << 8 << 12;
+    series->append(set);
+    histogramChart->addSeries(series);
+
+    QBarCategoryAxis *axisX = new QBarCategoryAxis();
+    axisX->append({"0-59", "60-69", "70-79", "80-89", "90-100"});
+    histogramChart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    QValueAxis *axisY = new QValueAxis();
+    axisY->setTitleText("人数");
+    histogramChart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    ui->chartViewHistogram->setChart(histogramChart);
 }
 
 void MainWindow::on_btnAdd_clicked()
@@ -99,6 +139,7 @@ void MainWindow::on_btnAdd_clicked()
     score.examDate = ui->dateExam->date();
 
     if (DatabaseManager::instance()->addScore(score)) {
+        // 刷新数据
         m_scoreModel->refreshData();
         clearForm();
         refreshFilterCombos();
@@ -137,6 +178,7 @@ void MainWindow::on_btnUpdate_clicked()
         m_scoreModel->refreshData();
         clearForm();
         updateStatusBar("更新成绩成功");
+        ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
     } else {
         QMessageBox::warning(this, "错误", "更新成绩失败");
     }
@@ -158,10 +200,12 @@ void MainWindow::on_btnDelete_clicked()
         return;
     }
 
-    if (QMessageBox::question(this, "确认删除",
-                              QString("确定要删除 %1 的 %2 成绩吗？").arg(score.studentName).arg(score.course))
-        == QMessageBox::Yes) {
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this, "确认删除",
+                                  QString("确定要删除 %1 的 %2 成绩吗？").arg(score.studentName).arg(score.course),
+                                  QMessageBox::Yes | QMessageBox::No);
 
+    if (reply == QMessageBox::Yes) {
         if (DatabaseManager::instance()->deleteScore(score.id)) {
             m_scoreModel->refreshData();
             clearForm();
@@ -243,17 +287,38 @@ void MainWindow::showHistogramChart(const QString &className, const QString &cou
 {
     // 创建柱状图
     QChart *chart = new QChart();
-    chart->setTitle("成绩分布直方图");
+    chart->setTitle(QString("成绩分布 - %1 %2").arg(className).arg(course));
 
     QBarSeries *series = new QBarSeries();
 
-    // 这里添加具体的成绩分布数据
-    // 示例：创建5个分数段的柱状图
+    // 模拟数据
     QStringList categories;
     categories << "0-59" << "60-69" << "70-79" << "80-89" << "90-100";
 
-    QBarSet *set = new QBarSet("人数");
-    *set << 5 << 10 << 15 << 8 << 12; // 示例数据
+    QBarSet *set = new QBarSet("人数分布");
+
+    // 根据统计结果生成模拟数据
+    QMap<QString, QVariant> stats = DatabaseManager::instance()->calculateStatistics(
+        className == "所有班级" ? "" : className,
+        course == "所有课程" ? "" : course
+        );
+
+    int count = stats["count"].toInt();
+    if (count > 0) {
+        double avg = stats["avg"].toDouble();
+        // 基于平均分生成模拟分布
+        if (avg >= 85) {
+            *set << 2 << 3 << 5 << 8 << 12;  // 优秀分布
+        } else if (avg >= 75) {
+            *set << 3 << 5 << 8 << 6 << 3;   // 良好分布
+        } else if (avg >= 60) {
+            *set << 5 << 8 << 6 << 3 << 1;   // 中等分布
+        } else {
+            *set << 10 << 5 << 3 << 1 << 0;  // 较差分布
+        }
+    } else {
+        *set << 0 << 0 << 0 << 0 << 0;
+    }
 
     series->append(set);
     chart->addSeries(series);
@@ -278,14 +343,13 @@ void MainWindow::showHistogramChart(const QString &className, const QString &cou
 
 void MainWindow::showTrendChart(const QString &className, const QString &course)
 {
-    // 创建折线图
     QChart *chart = new QChart();
-    chart->setTitle("成绩趋势图");
+    chart->setTitle(QString("成绩趋势 - %1 %2").arg(className).arg(course));
 
     QLineSeries *series = new QLineSeries();
     series->setName("平均分趋势");
 
-    // 示例数据
+    // 模拟趋势数据
     series->append(1, 75);
     series->append(2, 78);
     series->append(3, 82);
@@ -294,16 +358,14 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
 
     chart->addSeries(series);
 
-    // 设置X轴
     QValueAxis *axisX = new QValueAxis();
     axisX->setTitleText("考试次数");
     axisX->setLabelFormat("%d");
     chart->addAxis(axisX, Qt::AlignBottom);
     series->attachAxis(axisX);
 
-    // 设置Y轴
     QValueAxis *axisY = new QValueAxis();
-    axisY->setTitleText("成绩");
+    axisY->setTitleText("平均成绩");
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
 
@@ -312,21 +374,30 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
 
 void MainWindow::showComparisonChart(const QString &className)
 {
-    // 创建饼图或柱状对比图
     QChart *chart = new QChart();
-    chart->setTitle("课程对比分析");
+    chart->setTitle(QString("课程对比 - %1").arg(className));
 
     QPieSeries *series = new QPieSeries();
 
-    // 示例数据
-    series->append("数学", 82.5);
-    series->append("语文", 78.3);
-    series->append("英语", 85.1);
-    series->append("物理", 76.8);
-    series->append("化学", 80.2);
+    // 获取所有课程
+    QStringList courses = DatabaseManager::instance()->getAllCourses();
+    courses.removeAll("所有课程");
+
+    // 为每个课程计算平均分
+    for (const QString &course : courses) {
+        QMap<QString, QVariant> stats = DatabaseManager::instance()->calculateStatistics(
+            className == "所有班级" ? "" : className,
+            course
+            );
+
+        double avg = stats["avg"].toDouble();
+        if (avg > 0) {
+            series->append(course, avg);
+        }
+    }
 
     // 设置扇区标签
-    foreach (QPieSlice *slice, series->slices()) {
+    for (QPieSlice *slice : series->slices()) {
         slice->setLabelVisible();
         slice->setLabel(QString("%1\n%2分").arg(slice->label()).arg(slice->value()));
     }
@@ -427,7 +498,7 @@ void MainWindow::on_comboStatsCourse_currentTextChanged(const QString &text)
 
 void MainWindow::updateStatusBar(const QString &message)
 {
-    ui->statusbar->showMessage(message, 3000);
+    ui->statusbar->showMessage(message, 5000);
 }
 
 void MainWindow::on_btnGenerateReport_clicked()
@@ -437,7 +508,6 @@ void MainWindow::on_btnGenerateReport_clicked()
 
 void MainWindow::generateReport()
 {
-    // 这里可以生成详细的PDF报告
     QString className = ui->comboStatsClass->currentText();
     QString course = ui->comboStatsCourse->currentText();
 
@@ -447,27 +517,26 @@ void MainWindow::generateReport()
         );
 
     QString report = QString(
-                         "成绩分析报告\n"
-                         "====================\n"
+                         "========== 成绩分析报告 ==========\n\n"
                          "班级: %1\n"
-                         "课程: %2\n"
-                         "====================\n"
-                         "统计结果:\n"
+                         "课程: %2\n\n"
+                         "========== 统计结果 ==========\n"
                          "平均分: %3\n"
                          "最高分: %4\n"
                          "最低分: %5\n"
                          "标准差: %6\n"
                          "及格率: %7\n"
-                         "学生人数: %8\n"
+                         "学生人数: %8\n\n"
                          "生成时间: %9\n"
+                         "================================="
                          ).arg(className == "所有班级" ? "全部班级" : className)
                          .arg(course == "所有课程" ? "全部课程" : course)
-                         .arg(stats["avg"].toDouble(), 0, 'f', 2)
-                         .arg(stats["max"].toDouble(), 0, 'f', 2)
-                         .arg(stats["min"].toDouble(), 0, 'f', 2)
-                         .arg(stats["std_dev"].toDouble(), 0, 'f', 2)
-                         .arg(stats["pass_rate"].toDouble(), 0, 'f', 2)
-                         .arg(stats["count"].toInt())
+                         .arg(QString::number(stats["avg"].toDouble(), 'f', 2))
+                         .arg(QString::number(stats["max"].toDouble(), 'f', 2))
+                         .arg(QString::number(stats["min"].toDouble(), 'f', 2))
+                         .arg(QString::number(stats["std_dev"].toDouble(), 'f', 2))
+                         .arg(QString::number(stats["pass_rate"].toDouble(), 'f', 2))
+                         .arg(QString::number(stats["count"].toInt()))
                          .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
 
     QMessageBox::information(this, "成绩分析报告", report);

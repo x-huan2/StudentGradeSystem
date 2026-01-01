@@ -8,8 +8,11 @@
 #include <QVariant>
 #include <QList>
 #include <QMap>
-#include <QDate>  // 添加QDate头文件
-#include <QDir>   // 添加QDir头文件
+#include <QDate>
+#include <QDir>
+#include <QStandardPaths>
+#include <QDebug>
+#include <cmath>
 
 struct StudentScore {
     int id;
@@ -18,7 +21,7 @@ struct StudentScore {
     QString className;
     QString course;
     double score;
-    QDate examDate;  // 使用QDate
+    QDate examDate;
 };
 
 class DatabaseManager : public QObject
@@ -50,6 +53,10 @@ public:
     bool importFromExcel(const QString& filePath);
     bool exportToCSV(const QString& filePath);
 
+    // 测试数据库连接
+    bool isDatabaseConnected() const;
+    QString getDatabasePath() const;
+
 private:
     explicit DatabaseManager(QObject *parent = nullptr);
     DatabaseManager(const DatabaseManager&) = delete;
@@ -57,6 +64,8 @@ private:
 
     static DatabaseManager* m_instance;
     QSqlDatabase m_database;
+    bool createTables();
+    bool insertSampleData();
 };
 
 #endif // DATABASEMANAGER_H

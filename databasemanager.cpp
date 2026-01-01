@@ -1,23 +1,25 @@
 #include "databasemanager.h"
 #include <QFile>
 #include <QTextStream>
-#include <QDebug>
 #include <QFileInfo>
-#include <QStandardPaths>
-#include <cmath>  // 添加cmath头文件
+#include <QMessageBox>
 
 DatabaseManager* DatabaseManager::m_instance = nullptr;
 
 DatabaseManager::DatabaseManager(QObject *parent) : QObject(parent)
 {
-    QString appDataPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    // 设置数据库文件路径
+    QString appDataPath = "C:/Users/bill/Desktop/student_scores.db";
     QDir dir(appDataPath);
     if (!dir.exists()) {
         dir.mkpath(".");
     }
 
-    QString dbPath = appDataPath + "/scores.db";
-    m_database = QSqlDatabase::addDatabase("QSQLITE");
+    QString dbPath = appDataPath + "/student_scores.db";
+    qDebug() << "Database path:" << dbPath;
+
+    // 连接数据库
+    m_database = QSqlDatabase::addDatabase("QSQLITE", "StudentScoresConnection");
     m_database.setDatabaseName(dbPath);
 }
 
@@ -36,19 +38,50 @@ bool DatabaseManager::initializeDatabase()
         return false;
     }
 
-    QSqlQuery query;
+    qDebug() << "Database opened successfully";
+
+    // 创建表
+    if (!createTables()) {
+        qDebug() << "Failed to create tables";
+        return false;
+    }
+
+    // 检查是否有数据，如果没有则插入示例数据
+    QSqlQuery query(m_database);
+    query.prepare("SELECT COUNT(*) FROM scores");
+    if (query.exec() && query.next()) {
+        int count = query.value(0).toInt();
+        if (count == 0) {
+            qDebug() << "Database is empty, inserting sample data...";
+            insertSampleData();
+        }
+    }
+
+    return true;
+}
+
+bool DatabaseManager::createTables()
+{
+    QSqlQuery query(m_database);
 
     // 创建学生成绩表
-    query.exec("CREATE TABLE IF NOT EXISTS scores ("
-               "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-               "student_id TEXT NOT NULL,"
-               "student_name TEXT NOT NULL,"
-               "class_name TEXT NOT NULL,"
-               "course TEXT NOT NULL,"
-               "score REAL NOT NULL,"
-               "exam_date DATE NOT NULL,"
-               "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-               ")");
+    bool success = query.exec(
+        "CREATE TABLE IF NOT EXISTS scores ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "student_id TEXT NOT NULL,"
+        "student_name TEXT NOT NULL,"
+        "class_name TEXT NOT NULL,"
+        "course TEXT NOT NULL,"
+        "score REAL NOT NULL,"
+        "exam_date DATE NOT NULL,"
+        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        ")"
+        );
+
+    if (!success) {
+        qDebug() << "Create table error:" << query.lastError().text();
+        return false;
+    }
 
     // 创建索引以提高查询性能
     query.exec("CREATE INDEX IF NOT EXISTS idx_student_id ON scores(student_id)");
@@ -58,11 +91,40 @@ bool DatabaseManager::initializeDatabase()
     return true;
 }
 
+bool DatabaseManager::insertSampleData()
+{
+    QList<StudentScore> sampleData = {
+        {0, "2023001", "张三", "2023级1班", "数学", 85.5, QDate(2023, 9, 10)},
+        {0, "2023001", "张三", "2023级1班", "语文", 78.0, QDate(2023, 9, 12)},
+        {0, "2023001", "张三", "2023级1班", "英语", 92.0, QDate(2023, 9, 15)},
+        {0, "2023002", "李四", "2023级1班", "数学", 90.0, QDate(2023, 9, 10)},
+        {0, "2023002", "李四", "2023级1班", "语文", 82.5, QDate(2023, 9, 12)},
+        {0, "2023002", "李四", "2023级1班", "英语", 88.0, QDate(2023, 9, 15)},
+        {0, "2023003", "王五", "2023级2班", "数学", 76.0, QDate(2023, 9, 10)},
+        {0, "2023003", "王五", "2023级2班", "语文", 85.0, QDate(2023, 9, 12)},
+        {0, "2023003", "王五", "2023级2班", "英语", 79.5, QDate(2023, 9, 15)},
+        {0, "2023004", "赵六", "2023级2班", "数学", 88.0, QDate(2023, 9, 10)},
+        {0, "2023004", "赵六", "2023级2班", "语文", 91.0, QDate(2023, 9, 12)},
+        {0, "2023004", "赵六", "2023级2班", "英语", 86.5, QDate(2023, 9, 15)}
+    };
+
+    bool allSuccess = true;
+    for (const auto& score : sampleData) {
+        if (!addScore(score)) {
+            allSuccess = false;
+        }
+    }
+
+    return allSuccess;
+}
+
 bool DatabaseManager::addScore(const StudentScore &score)
 {
-    QSqlQuery query;
-    query.prepare("INSERT INTO scores (student_id, student_name, class_name, course, score, exam_date) "
-                  "VALUES (:student_id, :student_name, :class_name, :course, :score, :exam_date)");
+    QSqlQuery query(m_database);
+    query.prepare(
+        "INSERT INTO scores (student_id, student_name, class_name, course, score, exam_date) "
+        "VALUES (:student_id, :student_name, :class_name, :course, :score, :exam_date)"
+        );
     query.bindValue(":student_id", score.studentId);
     query.bindValue(":student_name", score.studentName);
     query.bindValue(":class_name", score.className);
@@ -70,20 +132,27 @@ bool DatabaseManager::addScore(const StudentScore &score)
     query.bindValue(":score", score.score);
     query.bindValue(":exam_date", score.examDate.toString("yyyy-MM-dd"));
 
-    return query.exec();
+    bool success = query.exec();
+    if (!success) {
+        qDebug() << "Add score error:" << query.lastError().text();
+    }
+
+    return success;
 }
 
 bool DatabaseManager::updateScore(int id, const StudentScore &score)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE scores SET "
-                  "student_id = :student_id, "
-                  "student_name = :student_name, "
-                  "class_name = :class_name, "
-                  "course = :course, "
-                  "score = :score, "
-                  "exam_date = :exam_date "
-                  "WHERE id = :id");
+    QSqlQuery query(m_database);
+    query.prepare(
+        "UPDATE scores SET "
+        "student_id = :student_id, "
+        "student_name = :student_name, "
+        "class_name = :class_name, "
+        "course = :course, "
+        "score = :score, "
+        "exam_date = :exam_date "
+        "WHERE id = :id"
+        );
     query.bindValue(":student_id", score.studentId);
     query.bindValue(":student_name", score.studentName);
     query.bindValue(":class_name", score.className);
@@ -92,21 +161,38 @@ bool DatabaseManager::updateScore(int id, const StudentScore &score)
     query.bindValue(":exam_date", score.examDate.toString("yyyy-MM-dd"));
     query.bindValue(":id", id);
 
-    return query.exec();
+    bool success = query.exec();
+    if (!success) {
+        qDebug() << "Update score error:" << query.lastError().text();
+    }
+
+    return success;
 }
 
 bool DatabaseManager::deleteScore(int id)
 {
-    QSqlQuery query;
+    QSqlQuery query(m_database);
     query.prepare("DELETE FROM scores WHERE id = :id");
     query.bindValue(":id", id);
-    return query.exec();
+
+    bool success = query.exec();
+    if (!success) {
+        qDebug() << "Delete score error:" << query.lastError().text();
+    }
+
+    return success;
 }
 
 QList<StudentScore> DatabaseManager::getAllScores()
 {
     QList<StudentScore> scores;
-    QSqlQuery query("SELECT id, student_id, student_name, class_name, course, score, exam_date FROM scores ORDER BY exam_date DESC");
+    QSqlQuery query(m_database);
+    query.prepare("SELECT id, student_id, student_name, class_name, course, score, exam_date FROM scores ORDER BY exam_date DESC");
+
+    if (!query.exec()) {
+        qDebug() << "Get all scores error:" << query.lastError().text();
+        return scores;
+    }
 
     while (query.next()) {
         StudentScore score;
@@ -139,7 +225,7 @@ QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className,
     }
     sql += " ORDER BY exam_date DESC";
 
-    QSqlQuery query;
+    QSqlQuery query(m_database);
     query.prepare(sql);
 
     if (!className.isEmpty() && className != "所有班级") {
@@ -190,7 +276,7 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
         sql += " AND course = :course";
     }
 
-    QSqlQuery query;
+    QSqlQuery query(m_database);
     query.prepare(sql);
 
     if (!className.isEmpty() && className != "所有班级") {
@@ -223,7 +309,7 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
                 varianceSql += " AND course = :course";
             }
 
-            QSqlQuery varianceQuery;
+            QSqlQuery varianceQuery(m_database);
             varianceQuery.prepare(varianceSql);
             varianceQuery.bindValue(":avg", avg);
             if (!className.isEmpty() && className != "所有班级") {
@@ -250,22 +336,32 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
 QStringList DatabaseManager::getAllClasses()
 {
     QStringList classes;
-    QSqlQuery query("SELECT DISTINCT class_name FROM scores ORDER BY class_name");
-    classes << "所有班级";
-    while (query.next()) {
-        classes << query.value(0).toString();
+    QSqlQuery query(m_database);
+    query.prepare("SELECT DISTINCT class_name FROM scores ORDER BY class_name");
+
+    if (query.exec()) {
+        classes << "所有班级";
+        while (query.next()) {
+            classes << query.value(0).toString();
+        }
     }
+
     return classes;
 }
 
 QStringList DatabaseManager::getAllCourses()
 {
     QStringList courses;
-    QSqlQuery query("SELECT DISTINCT course FROM scores ORDER BY course");
-    courses << "所有课程";
-    while (query.next()) {
-        courses << query.value(0).toString();
+    QSqlQuery query(m_database);
+    query.prepare("SELECT DISTINCT course FROM scores ORDER BY course");
+
+    if (query.exec()) {
+        courses << "所有课程";
+        while (query.next()) {
+            courses << query.value(0).toString();
+        }
     }
+
     return courses;
 }
 
@@ -273,6 +369,7 @@ bool DatabaseManager::importFromCSV(const QString &filePath)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qDebug() << "Cannot open file:" << filePath;
         return false;
     }
 
@@ -305,6 +402,7 @@ bool DatabaseManager::importFromCSV(const QString &filePath)
     }
 
     file.close();
+    qDebug() << "Import from CSV: success =" << successCount << ", errors =" << errorCount;
     return successCount > 0;
 }
 
@@ -312,6 +410,7 @@ bool DatabaseManager::exportToCSV(const QString &filePath)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qDebug() << "Cannot create file:" << filePath;
         return false;
     }
 
@@ -319,7 +418,7 @@ bool DatabaseManager::exportToCSV(const QString &filePath)
     out << "学号,姓名,班级,课程,成绩,考试日期\n";
 
     QList<StudentScore> scores = getAllScores();
-    foreach (const StudentScore& score, scores) {
+    for (const StudentScore& score : scores) {
         out << score.studentId << ","
             << score.studentName << ","
             << score.className << ","
@@ -330,4 +429,14 @@ bool DatabaseManager::exportToCSV(const QString &filePath)
 
     file.close();
     return true;
+}
+
+bool DatabaseManager::isDatabaseConnected() const
+{
+    return m_database.isOpen();
+}
+
+QString DatabaseManager::getDatabasePath() const
+{
+    return m_database.databaseName();
 }

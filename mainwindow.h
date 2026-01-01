@@ -48,6 +48,7 @@ private:
     void clearForm();
     void updateStatusBar(const QString &message);
 
+    void showDefaultCharts();  // 添加这个声明
     void showHistogramChart(const QString& className, const QString& course);
     void showTrendChart(const QString& className, const QString& course);
     void showComparisonChart(const QString& className);
