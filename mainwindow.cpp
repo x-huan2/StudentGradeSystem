@@ -629,7 +629,6 @@ void MainWindow::showHistogramChart(const QString &className, const QString &cou
     ui->chartViewHistogram->setChart(chart);
 }
 
-// 修改：简化趋势图表函数，使用具体日期点
 void MainWindow::showTrendChart(const QString &className, const QString &course,
                                 const QString &examDate)
 {
@@ -754,7 +753,6 @@ void MainWindow::showTrendChart(const QString &className, const QString &course,
     ui->chartViewTrend->setChart(chart);
 }
 
-// 修改：简化对比图表函数，使用具体日期点
 void MainWindow::showComparisonChart(const QString &className,
                                      const QString &examDate)
 {
