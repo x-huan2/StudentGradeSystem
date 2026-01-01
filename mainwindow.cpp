@@ -73,18 +73,48 @@ void MainWindow::setupUI()
 
 void MainWindow::setupDatabase()
 {
+    // 直接连接到指定数据库文件
+    QString dbPath = "C:/Users/bill/Desktop/student_scores/student_scores.db";
+
+    // 检查数据库文件是否存在
+    QFileInfo dbFile(dbPath);
+    if (!dbFile.exists()) {
+        qDebug() << "数据库文件不存在，将创建新数据库";
+        QMessageBox::information(this, "提示",
+                                 QString("数据库文件不存在，将创建新数据库文件:\n%1\n\n程序将自动创建数据表。")
+                                     .arg(dbPath));
+    }
+
+    // 初始化数据库
     if (DatabaseManager::instance()->initializeDatabase()) {
-        QString dbPath = DatabaseManager::instance()->getDatabasePath();
-        updateStatusBar(QString("数据库连接成功 - 路径: %1").arg(dbPath));
+        QString actualDbPath = DatabaseManager::instance()->getDatabasePath();
+        updateStatusBar(QString("数据库连接成功 - 路径: %1").arg(actualDbPath));
+
+        // 显示数据库信息
+        qDebug() << "数据库连接成功，路径:" << actualDbPath;
 
         // 刷新数据模型
         m_scoreModel->refreshData();
         ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
 
-        qDebug() << "Database initialized and data loaded successfully";
+        qDebug() << "数据库初始化完成，加载了" << m_scoreModel->rowCount() << "条记录";
+
+        // 如果数据库为空，显示提示
+        if (m_scoreModel->rowCount() == 0) {
+            QMessageBox::information(this, "提示",
+                                     "数据库中没有学生成绩记录。\n\n请通过以下方式添加数据：\n"
+                                     "1. 使用上方的表单手动添加记录\n"
+                                     "2. 使用'导入CSV'功能批量导入数据\n"
+                                     "3. 使用文件菜单中的导入功能");
+        }
     } else {
         updateStatusBar("数据库连接失败");
-        QMessageBox::critical(this, "错误", "无法连接数据库，请检查数据库配置");
+        QString errorMsg = QString("无法连接数据库，请检查：\n"
+                                   "1. 数据库文件路径: %1\n"
+                                   "2. 是否有写入权限\n"
+                                   "3. 数据库是否被其他程序占用")
+                               .arg(dbPath);
+        QMessageBox::critical(this, "错误", errorMsg);
     }
 }
 
@@ -101,6 +131,17 @@ void MainWindow::setupCharts()
 
 void MainWindow::showDefaultCharts()
 {
+    // 检查是否有数据
+    if (m_scoreModel->rowCount() == 0) {
+        // 显示空图表提示
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle("暂无数据");
+        ui->chartViewHistogram->setChart(emptyChart);
+        ui->chartViewTrend->setChart(emptyChart);
+        ui->chartViewComparison->setChart(emptyChart);
+        return;
+    }
+
     // 显示默认的柱状图
     QChart *histogramChart = new QChart();
     histogramChart->setTitle("成绩分布 (示例)");
@@ -123,10 +164,113 @@ void MainWindow::showDefaultCharts()
     ui->chartViewHistogram->setChart(histogramChart);
 }
 
+// ==================== 菜单动作槽函数实现 ====================
+
+void MainWindow::on_actionImport_triggered()
+{
+    // 调用导入CSV功能
+    on_btnImportCSV_clicked();
+}
+
+void MainWindow::on_actionExport_triggered()
+{
+    // 调用导出报表功能
+    on_btnExport_clicked();
+}
+
+void MainWindow::on_actionExit_triggered()
+{
+    // 退出程序
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this, "退出",
+                                  "确定要退出程序吗？",
+                                  QMessageBox::Yes | QMessageBox::No);
+
+    if (reply == QMessageBox::Yes) {
+        QApplication::quit();
+    }
+}
+
+void MainWindow::on_actionAddRecord_triggered()
+{
+    // 调用添加记录功能
+    on_btnAdd_clicked();
+}
+
+void MainWindow::on_actionEditRecord_triggered()
+{
+    // 检查是否有选中的行
+    QModelIndexList selected = ui->tableView->selectionModel()->selectedRows();
+    if (selected.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择要编辑的记录");
+        return;
+    }
+
+    // 加载选中记录到表单
+    loadSelectedScoreToForm();
+
+    // 切换到数据管理标签页
+    ui->tabWidget->setCurrentIndex(0);
+}
+
+void MainWindow::on_actionDeleteRecord_triggered()
+{
+    // 调用删除记录功能
+    on_btnDelete_clicked();
+}
+
+void MainWindow::on_actionRefresh_triggered()
+{
+    // 调用刷新数据功能
+    on_btnRefresh_clicked();
+}
+
+void MainWindow::on_actionStatistics_triggered()
+{
+    // 切换到统计分析标签页
+    ui->tabWidget->setCurrentIndex(1);
+    updateStatusBar("已切换到统计分析页面");
+}
+
+void MainWindow::on_actionCharts_triggered()
+{
+    // 切换到统计分析标签页中的图表页面
+    ui->tabWidget->setCurrentIndex(1);
+    updateStatusBar("已切换到图表分析页面");
+}
+
+void MainWindow::on_actionReports_triggered()
+{
+    // 调用生成报告功能
+    on_btnGenerateReport_clicked();
+}
+
+void MainWindow::on_actionAbout_triggered()
+{
+    // 显示关于对话框
+    QMessageBox::about(this, "关于学生成绩与分析系统",
+                       "<h2>学生成绩与分析系统</h2>"
+                       "<p>版本: 1.0.0</p>"
+                       "<p>数据库路径: C:/Users/bill/Desktop/student_scores.db</p>"
+                       "<p>开发: 慕容显欢 2023414290427</p>");
+}
+
+// ==================== 原有的按钮槽函数 ====================
+
 void MainWindow::on_btnAdd_clicked()
 {
     if (ui->editStudentId->text().isEmpty() || ui->editStudentName->text().isEmpty()) {
         QMessageBox::warning(this, "警告", "请填写学号和姓名");
+        return;
+    }
+
+    if (ui->comboClass->currentText().isEmpty()) {
+        QMessageBox::warning(this, "警告", "请选择班级");
+        return;
+    }
+
+    if (ui->comboCourse->currentText().isEmpty()) {
+        QMessageBox::warning(this, "警告", "请选择课程");
         return;
     }
 
@@ -145,6 +289,11 @@ void MainWindow::on_btnAdd_clicked()
         refreshFilterCombos();
         updateStatusBar("添加成绩成功");
         ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
+
+        // 如果这是第一条记录，更新图表
+        if (m_scoreModel->rowCount() == 1) {
+            setupCharts();
+        }
     } else {
         QMessageBox::warning(this, "错误", "添加成绩失败");
     }
@@ -228,14 +377,25 @@ void MainWindow::on_btnRefresh_clicked()
 
 void MainWindow::on_btnImportCSV_clicked()
 {
-    QString filePath = QFileDialog::getOpenFileName(this, "选择CSV文件", "", "CSV文件 (*.csv)");
+    QString filePath = QFileDialog::getOpenFileName(this, "选择CSV文件", "", "CSV文件 (*.csv);;所有文件 (*.*)");
     if (filePath.isEmpty()) return;
+
+    // 确认导入
+    QMessageBox::StandardButton reply;
+    reply = QMessageBox::question(this, "确认导入",
+                                  QString("确定要从文件导入数据吗？\n文件路径: %1").arg(filePath),
+                                  QMessageBox::Yes | QMessageBox::No);
+
+    if (reply != QMessageBox::Yes) return;
 
     if (DatabaseManager::instance()->importFromCSV(filePath)) {
         m_scoreModel->refreshData();
         refreshFilterCombos();
         updateStatusBar("CSV导入成功");
         ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
+
+        // 更新图表
+        setupCharts();
     } else {
         QMessageBox::warning(this, "错误", "CSV导入失败");
     }
@@ -243,7 +403,14 @@ void MainWindow::on_btnImportCSV_clicked()
 
 void MainWindow::on_btnExport_clicked()
 {
-    QString filePath = QFileDialog::getSaveFileName(this, "导出报表", "", "CSV文件 (*.csv)");
+    if (m_scoreModel->rowCount() == 0) {
+        QMessageBox::warning(this, "警告", "没有数据可以导出");
+        return;
+    }
+
+    QString defaultFileName = QString("学生成绩_%1.csv")
+                                  .arg(QDate::currentDate().toString("yyyyMMdd"));
+    QString filePath = QFileDialog::getSaveFileName(this, "导出报表", defaultFileName, "CSV文件 (*.csv);;所有文件 (*.*)");
     if (filePath.isEmpty()) return;
 
     if (!filePath.endsWith(".csv", Qt::CaseInsensitive)) {
@@ -252,6 +419,10 @@ void MainWindow::on_btnExport_clicked()
 
     if (DatabaseManager::instance()->exportToCSV(filePath)) {
         updateStatusBar(QString("报表已导出到: %1").arg(filePath));
+        QMessageBox::information(this, "导出成功",
+                                 QString("成功导出 %1 条记录到:\n%2")
+                                     .arg(m_scoreModel->rowCount())
+                                     .arg(filePath));
     } else {
         QMessageBox::warning(this, "错误", "报表导出失败");
     }
@@ -259,6 +430,11 @@ void MainWindow::on_btnExport_clicked()
 
 void MainWindow::on_btnCalculateStats_clicked()
 {
+    if (m_scoreModel->rowCount() == 0) {
+        QMessageBox::warning(this, "警告", "没有数据可以统计");
+        return;
+    }
+
     QString className = ui->comboStatsClass->currentText();
     QString course = ui->comboStatsCourse->currentText();
 
@@ -457,6 +633,17 @@ void MainWindow::refreshFilterCombos()
 
     ui->comboStatsCourse->clear();
     ui->comboStatsCourse->addItems(courses);
+
+    // 如果班级下拉框为空，添加默认选项
+    if (ui->comboClass->count() == 0) {
+        ui->comboClass->addItems(QStringList() << "2023级1班" << "2023级2班" << "2023级3班"
+                                               << "2024级1班" << "2024级2班" << "2024级3班");
+    }
+
+    // 如果课程下拉框为空，添加默认选项
+    if (ui->comboCourse->count() == 0) {
+        ui->comboCourse->addItems(QStringList() << "数学" << "语文" << "英语" << "物理" << "化学" << "生物");
+    }
 }
 
 void MainWindow::on_editSearch_textChanged(const QString &text)
@@ -508,6 +695,11 @@ void MainWindow::on_btnGenerateReport_clicked()
 
 void MainWindow::generateReport()
 {
+    if (m_scoreModel->rowCount() == 0) {
+        QMessageBox::warning(this, "警告", "没有数据可以生成报告");
+        return;
+    }
+
     QString className = ui->comboStatsClass->currentText();
     QString course = ui->comboStatsCourse->currentText();
 
@@ -517,7 +709,7 @@ void MainWindow::generateReport()
         );
 
     QString report = QString(
-                         "========== 成绩分析报告 ==========\n\n"
+                         "========== 学生成绩分析报告 ==========\n\n"
                          "班级: %1\n"
                          "课程: %2\n\n"
                          "========== 统计结果 ==========\n"
@@ -525,9 +717,10 @@ void MainWindow::generateReport()
                          "最高分: %4\n"
                          "最低分: %5\n"
                          "标准差: %6\n"
-                         "及格率: %7\n"
+                         "及格率: %7%%\n"
                          "学生人数: %8\n\n"
                          "生成时间: %9\n"
+                         "数据库路径: %10\n"
                          "================================="
                          ).arg(className == "所有班级" ? "全部班级" : className)
                          .arg(course == "所有课程" ? "全部课程" : course)
@@ -537,7 +730,8 @@ void MainWindow::generateReport()
                          .arg(QString::number(stats["std_dev"].toDouble(), 'f', 2))
                          .arg(QString::number(stats["pass_rate"].toDouble(), 'f', 2))
                          .arg(QString::number(stats["count"].toInt()))
-                         .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"));
+                         .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss"))
+                         .arg(DatabaseManager::instance()->getDatabasePath());
 
-    QMessageBox::information(this, "成绩分析报告", report);
+    QMessageBox::information(this, "学生成绩分析报告", report);
 }

@@ -20,6 +20,7 @@ public:
     ~MainWindow();
 
 private slots:
+    // 按钮槽函数
     void on_btnAdd_clicked();
     void on_btnUpdate_clicked();
     void on_btnDelete_clicked();
@@ -36,6 +37,20 @@ private slots:
     void on_comboStatsClass_currentTextChanged(const QString &text);
     void on_comboStatsCourse_currentTextChanged(const QString &text);
 
+    // 菜单动作槽函数 - 新增
+    void on_actionImport_triggered();
+    void on_actionExport_triggered();
+    void on_actionExit_triggered();
+    void on_actionAddRecord_triggered();
+    void on_actionEditRecord_triggered();
+    void on_actionDeleteRecord_triggered();
+    void on_actionRefresh_triggered();
+    void on_actionStatistics_triggered();
+    void on_actionCharts_triggered();
+    void on_actionReports_triggered();
+    void on_actionAbout_triggered();
+
+
 private:
     Ui::MainWindow *ui;
     ScoreModel *m_scoreModel;
@@ -48,7 +63,7 @@ private:
     void clearForm();
     void updateStatusBar(const QString &message);
 
-    void showDefaultCharts();  // 添加这个声明
+    void showDefaultCharts();
     void showHistogramChart(const QString& className, const QString& course);
     void showTrendChart(const QString& className, const QString& course);
     void showComparisonChart(const QString& className);

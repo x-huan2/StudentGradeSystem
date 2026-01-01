@@ -3,20 +3,27 @@
 #include <QTextStream>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QApplication>
+#include <QDir>
 
 DatabaseManager* DatabaseManager::m_instance = nullptr;
 
 DatabaseManager::DatabaseManager(QObject *parent) : QObject(parent)
 {
     // 设置数据库文件路径
-    QString appDataPath = "C:/Users/bill/Desktop/student_scores.db";
-    QDir dir(appDataPath);
-    if (!dir.exists()) {
-        dir.mkpath(".");
+    QString dbPath = "C:/Users/bill/Desktop/student_scores/student_scores.db";
+
+    // 确保桌面目录存在
+    QDir desktopDir("C:/Users/bill/Desktop");
+    if (!desktopDir.exists()) {
+        qDebug() << "桌面目录不存在，尝试创建...";
+        if (!desktopDir.mkpath(".")) {
+            qDebug() << "无法创建桌面目录";
+            return;
+        }
     }
 
-    QString dbPath = appDataPath + "/student_scores.db";
-    qDebug() << "Database path:" << dbPath;
+    qDebug() << "数据库路径:" << dbPath;
 
     // 连接数据库
     m_database = QSqlDatabase::addDatabase("QSQLITE", "StudentScoresConnection");
@@ -34,27 +41,24 @@ DatabaseManager* DatabaseManager::instance()
 bool DatabaseManager::initializeDatabase()
 {
     if (!m_database.open()) {
-        qDebug() << "Database error:" << m_database.lastError().text();
+        qDebug() << "数据库错误:" << m_database.lastError().text();
         return false;
     }
 
-    qDebug() << "Database opened successfully";
+    qDebug() << "数据库成功打开";
 
     // 创建表
     if (!createTables()) {
-        qDebug() << "Failed to create tables";
+        qDebug() << "创建表失败";
         return false;
     }
 
-    // 检查是否有数据，如果没有则插入示例数据
+    // 检查数据库是否已有数据
     QSqlQuery query(m_database);
     query.prepare("SELECT COUNT(*) FROM scores");
     if (query.exec() && query.next()) {
         int count = query.value(0).toInt();
-        if (count == 0) {
-            qDebug() << "Database is empty, inserting sample data...";
-            insertSampleData();
-        }
+        qDebug() << "数据库中有" << count << "条记录";
     }
 
     return true;
@@ -79,7 +83,7 @@ bool DatabaseManager::createTables()
         );
 
     if (!success) {
-        qDebug() << "Create table error:" << query.lastError().text();
+        qDebug() << "创建表错误:" << query.lastError().text();
         return false;
     }
 
@@ -89,33 +93,6 @@ bool DatabaseManager::createTables()
     query.exec("CREATE INDEX IF NOT EXISTS idx_exam_date ON scores(exam_date)");
 
     return true;
-}
-
-bool DatabaseManager::insertSampleData()
-{
-    QList<StudentScore> sampleData = {
-        {0, "2023001", "张三", "2023级1班", "数学", 85.5, QDate(2023, 9, 10)},
-        {0, "2023001", "张三", "2023级1班", "语文", 78.0, QDate(2023, 9, 12)},
-        {0, "2023001", "张三", "2023级1班", "英语", 92.0, QDate(2023, 9, 15)},
-        {0, "2023002", "李四", "2023级1班", "数学", 90.0, QDate(2023, 9, 10)},
-        {0, "2023002", "李四", "2023级1班", "语文", 82.5, QDate(2023, 9, 12)},
-        {0, "2023002", "李四", "2023级1班", "英语", 88.0, QDate(2023, 9, 15)},
-        {0, "2023003", "王五", "2023级2班", "数学", 76.0, QDate(2023, 9, 10)},
-        {0, "2023003", "王五", "2023级2班", "语文", 85.0, QDate(2023, 9, 12)},
-        {0, "2023003", "王五", "2023级2班", "英语", 79.5, QDate(2023, 9, 15)},
-        {0, "2023004", "赵六", "2023级2班", "数学", 88.0, QDate(2023, 9, 10)},
-        {0, "2023004", "赵六", "2023级2班", "语文", 91.0, QDate(2023, 9, 12)},
-        {0, "2023004", "赵六", "2023级2班", "英语", 86.5, QDate(2023, 9, 15)}
-    };
-
-    bool allSuccess = true;
-    for (const auto& score : sampleData) {
-        if (!addScore(score)) {
-            allSuccess = false;
-        }
-    }
-
-    return allSuccess;
 }
 
 bool DatabaseManager::addScore(const StudentScore &score)
@@ -134,7 +111,9 @@ bool DatabaseManager::addScore(const StudentScore &score)
 
     bool success = query.exec();
     if (!success) {
-        qDebug() << "Add score error:" << query.lastError().text();
+        qDebug() << "添加成绩错误:" << query.lastError().text();
+    } else {
+        qDebug() << "成功添加成绩:" << score.studentName << score.course << score.score;
     }
 
     return success;
@@ -163,7 +142,7 @@ bool DatabaseManager::updateScore(int id, const StudentScore &score)
 
     bool success = query.exec();
     if (!success) {
-        qDebug() << "Update score error:" << query.lastError().text();
+        qDebug() << "更新成绩错误:" << query.lastError().text();
     }
 
     return success;
@@ -177,7 +156,7 @@ bool DatabaseManager::deleteScore(int id)
 
     bool success = query.exec();
     if (!success) {
-        qDebug() << "Delete score error:" << query.lastError().text();
+        qDebug() << "删除成绩错误:" << query.lastError().text();
     }
 
     return success;
@@ -190,7 +169,7 @@ QList<StudentScore> DatabaseManager::getAllScores()
     query.prepare("SELECT id, student_id, student_name, class_name, course, score, exam_date FROM scores ORDER BY exam_date DESC");
 
     if (!query.exec()) {
-        qDebug() << "Get all scores error:" << query.lastError().text();
+        qDebug() << "获取所有成绩错误:" << query.lastError().text();
         return scores;
     }
 
@@ -206,6 +185,7 @@ QList<StudentScore> DatabaseManager::getAllScores()
         scores.append(score);
     }
 
+    qDebug() << "获取到" << scores.size() << "条成绩记录";
     return scores;
 }
 
@@ -239,7 +219,7 @@ QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className,
     }
 
     if (!query.exec()) {
-        qDebug() << "Query error:" << query.lastError().text();
+        qDebug() << "查询错误:" << query.lastError().text();
         return scores;
     }
 
@@ -365,17 +345,35 @@ QStringList DatabaseManager::getAllCourses()
     return courses;
 }
 
+QStringList DatabaseManager::getAllStudents()
+{
+    QStringList students;
+    QSqlQuery query(m_database);
+    query.prepare("SELECT DISTINCT student_id, student_name FROM scores ORDER BY student_id");
+
+    if (query.exec()) {
+        while (query.next()) {
+            QString studentId = query.value(0).toString();
+            QString studentName = query.value(1).toString();
+            students << QString("%1 - %2").arg(studentId).arg(studentName);
+        }
+    }
+
+    return students;
+}
+
 bool DatabaseManager::importFromCSV(const QString &filePath)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qDebug() << "Cannot open file:" << filePath;
+        qDebug() << "无法打开文件:" << filePath;
         return false;
     }
 
     QTextStream in(&file);
     // 跳过标题行
-    in.readLine();
+    QString headerLine = in.readLine();
+    qDebug() << "CSV标题行:" << headerLine;
 
     int successCount = 0;
     int errorCount = 0;
@@ -398,19 +396,30 @@ bool DatabaseManager::importFromCSV(const QString &filePath)
             } else {
                 errorCount++;
             }
+        } else {
+            qDebug() << "CSV行格式错误:" << line;
+            errorCount++;
         }
     }
 
     file.close();
-    qDebug() << "Import from CSV: success =" << successCount << ", errors =" << errorCount;
+    qDebug() << "CSV导入结果: 成功 =" << successCount << ", 失败 =" << errorCount;
     return successCount > 0;
+}
+
+bool DatabaseManager::importFromExcel(const QString &filePath)
+{
+    // 这里需要安装额外的库来处理Excel文件
+    // 暂时先返回false，或调用CSV导入
+    QMessageBox::information(nullptr, "提示", "Excel导入功能需要额外安装库支持，请使用CSV格式导入");
+    return false;
 }
 
 bool DatabaseManager::exportToCSV(const QString &filePath)
 {
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qDebug() << "Cannot create file:" << filePath;
+        qDebug() << "无法创建文件:" << filePath;
         return false;
     }
 
@@ -428,6 +437,7 @@ bool DatabaseManager::exportToCSV(const QString &filePath)
     }
 
     file.close();
+    qDebug() << "导出完成，共" << scores.size() << "条记录";
     return true;
 }
 
@@ -439,4 +449,26 @@ bool DatabaseManager::isDatabaseConnected() const
 QString DatabaseManager::getDatabasePath() const
 {
     return m_database.databaseName();
+}
+
+// 这些函数暂时返回空列表，以后可以扩展
+QList<QMap<QString, QVariant>> DatabaseManager::getScoreDistribution(const QString& className, const QString& course, int bins)
+{
+    Q_UNUSED(className);
+    Q_UNUSED(course);
+    Q_UNUSED(bins);
+    return QList<QMap<QString, QVariant>>();
+}
+
+QList<QMap<QString, QVariant>> DatabaseManager::getTrendData(const QString& studentId, const QString& course)
+{
+    Q_UNUSED(studentId);
+    Q_UNUSED(course);
+    return QList<QMap<QString, QVariant>>();
+}
+
+QList<QMap<QString, QVariant>> DatabaseManager::getCourseComparison(const QString& className)
+{
+    Q_UNUSED(className);
+    return QList<QMap<QString, QVariant>>();
 }

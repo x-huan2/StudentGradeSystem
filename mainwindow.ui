@@ -182,23 +182,6 @@
                 </property>
                </widget>
               </item>
-              <item>
-               <widget class="QPushButton" name="btnImportExcel">
-                <property name="text">
-                 <string>导入Excel文件</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="labelBatchStatus">
-                <property name="text">
-                 <string>未导入数据</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignmentFlag::AlignCenter</set>
-                </property>
-               </widget>
-              </item>
              </layout>
             </widget>
            </item>
