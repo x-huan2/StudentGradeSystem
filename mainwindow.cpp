@@ -151,11 +151,8 @@ void MainWindow::showDefaultCharts()
 
     // 显示默认的柱状图
     QChart *histogramChart = new QChart();
-    histogramChart->setTitle("成绩分布 (示例)");
+    histogramChart->setTitle("成绩分布");
     QBarSeries *series = new QBarSeries();
-    QBarSet *set = new QBarSet("示例数据");
-    *set << 5 << 10 << 15 << 8 << 12;
-    series->append(set);
     histogramChart->addSeries(series);
 
     QBarCategoryAxis *axisX = new QBarCategoryAxis();
