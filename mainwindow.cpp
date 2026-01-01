@@ -171,6 +171,90 @@ void MainWindow::showDefaultCharts()
     ui->chartViewHistogram->setChart(histogramChart);
 }
 
+// ==================== 修改：日期筛选槽函数改为下拉框 ====================
+
+void MainWindow::on_comboFilterDate_currentTextChanged(const QString &text)
+{
+    Q_UNUSED(text);
+    updateDataFilter();
+}
+
+void MainWindow::on_comboStatsDate_currentTextChanged(const QString &text)
+{
+    Q_UNUSED(text);
+    updateStatisticsFilter();
+}
+
+// ==================== 修改：更新筛选函数 ====================
+
+void MainWindow::updateDataFilter()
+{
+    QString className = ui->comboFilterClass->currentText();
+    QString course = ui->comboFilterCourse->currentText();
+    QString examDate = ui->comboFilterDate->currentText();
+    QString keyword = ui->editSearch->text();
+
+    m_scoreModel->filterData(
+        className == "所有班级" ? "" : className,
+        course == "所有课程" ? "" : course,
+        examDate == "所有日期" ? "" : examDate,
+        keyword
+        );
+
+    int recordCount = m_scoreModel->rowCount();
+    ui->labelRecordCount->setText(QString("筛选记录数: %1").arg(recordCount));
+
+    // 更新状态栏
+    if (examDate != "所有日期" && !examDate.isEmpty()) {
+        updateStatusBar(QString("已筛选考试日期: %1，共%2条记录").arg(examDate).arg(recordCount));
+    } else {
+        updateStatusBar(QString("已筛选，共%1条记录").arg(recordCount));
+    }
+}
+
+void MainWindow::updateStatisticsFilter()
+{
+    // 统计筛选无需特殊处理，只更新UI
+}
+
+// ==================== 修改：刷新筛选下拉框函数 ====================
+
+void MainWindow::refreshFilterCombos()
+{
+    QStringList classes = DatabaseManager::instance()->getAllClasses();
+    QStringList courses = DatabaseManager::instance()->getAllCourses();
+    QStringList examDates = DatabaseManager::instance()->getAllExamDates();
+
+    ui->comboFilterClass->clear();
+    ui->comboFilterClass->addItems(classes);
+
+    ui->comboFilterCourse->clear();
+    ui->comboFilterCourse->addItems(courses);
+
+    ui->comboFilterDate->clear();
+    ui->comboFilterDate->addItems(examDates);
+
+    ui->comboStatsClass->clear();
+    ui->comboStatsClass->addItems(classes);
+
+    ui->comboStatsCourse->clear();
+    ui->comboStatsCourse->addItems(courses);
+
+    ui->comboStatsDate->clear();
+    ui->comboStatsDate->addItems(examDates);
+
+    // 如果班级下拉框为空，添加默认选项
+    if (ui->comboClass->count() == 0) {
+        ui->comboClass->addItems(QStringList() << "2023级1班" << "2023级2班" << "2023级3班"
+                                               << "2024级1班" << "2024级2班" << "2024级3班");
+    }
+
+    // 如果课程下拉框为空，添加默认选项
+    if (ui->comboCourse->count() == 0) {
+        ui->comboCourse->addItems(QStringList() << "数学" << "语文" << "英语" << "物理" << "化学" << "生物");
+    }
+}
+
 // ==================== 菜单动作槽函数实现 ====================
 
 void MainWindow::on_actionImport_triggered()
@@ -293,7 +377,7 @@ void MainWindow::on_btnAdd_clicked()
         // 刷新数据
         m_scoreModel->refreshData();
         clearForm();
-        refreshFilterCombos();
+        refreshFilterCombos(); // 刷新筛选下拉框
         updateStatusBar("添加成绩成功");
         ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
 
@@ -333,6 +417,7 @@ void MainWindow::on_btnUpdate_clicked()
     if (DatabaseManager::instance()->updateScore(oldScore.id, newScore)) {
         m_scoreModel->refreshData();
         clearForm();
+        refreshFilterCombos(); // 刷新筛选下拉框
         updateStatusBar("更新成绩成功");
         ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
     } else {
@@ -365,7 +450,7 @@ void MainWindow::on_btnDelete_clicked()
         if (DatabaseManager::instance()->deleteScore(score.id)) {
             m_scoreModel->refreshData();
             clearForm();
-            refreshFilterCombos();
+            refreshFilterCombos(); // 刷新筛选下拉框
             updateStatusBar("删除成绩成功");
             ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
         } else {
@@ -377,7 +462,7 @@ void MainWindow::on_btnDelete_clicked()
 void MainWindow::on_btnRefresh_clicked()
 {
     m_scoreModel->refreshData();
-    refreshFilterCombos();
+    refreshFilterCombos(); // 刷新筛选下拉框
     updateStatusBar("数据已刷新");
     ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
 }
@@ -397,7 +482,7 @@ void MainWindow::on_btnImportCSV_clicked()
 
     if (DatabaseManager::instance()->importFromCSV(filePath)) {
         m_scoreModel->refreshData();
-        refreshFilterCombos();
+        refreshFilterCombos(); // 刷新筛选下拉框
         updateStatusBar("CSV导入成功");
         ui->labelRecordCount->setText(QString("总记录数: %1").arg(m_scoreModel->rowCount()));
 
@@ -444,10 +529,12 @@ void MainWindow::on_btnCalculateStats_clicked()
 
     QString className = ui->comboStatsClass->currentText();
     QString course = ui->comboStatsCourse->currentText();
+    QString examDate = ui->comboStatsDate->currentText();
 
     QMap<QString, QVariant> stats = DatabaseManager::instance()->calculateStatistics(
         className == "所有班级" ? "" : className,
-        course == "所有课程" ? "" : course
+        course == "所有课程" ? "" : course,
+        examDate == "所有日期" ? "" : examDate
         );
 
     // 更新统计结果标签
@@ -459,19 +546,22 @@ void MainWindow::on_btnCalculateStats_clicked()
     ui->labelCountValue->setText(QString::number(stats["count"].toInt()));
 
     // 更新图表
-    showHistogramChart(className, course);
-    showTrendChart(className, course);
-    showComparisonChart(className);
+    showHistogramChart(className, course, examDate);
+    showTrendChart(className, course, examDate);
+    showComparisonChart(className, examDate);
 
     updateStatusBar("统计计算完成");
 }
 
-void MainWindow::showHistogramChart(const QString &className, const QString &course)
+// 修改：简化图表显示函数，使用具体日期点
+void MainWindow::showHistogramChart(const QString &className, const QString &course,
+                                    const QString &examDate)
 {
     // 从数据库获取实际的成绩分布数据
     QList<QMap<QString, QVariant>> distribution = DatabaseManager::instance()->getScoreDistribution(
         className == "所有班级" ? "" : className,
         course == "所有课程" ? "" : course,
+        examDate == "所有日期" ? "" : examDate,
         5  // 使用5个区间
         );
 
@@ -485,7 +575,15 @@ void MainWindow::showHistogramChart(const QString &className, const QString &cou
 
     // 创建柱状图
     QChart *chart = new QChart();
-    chart->setTitle(QString("成绩分布 - %1 %2").arg(className).arg(course));
+
+    // 构建标题
+    QString title = "成绩分布";
+    if (className != "所有班级") title += " - " + className;
+    if (course != "所有课程") title += " " + course;
+    if (examDate != "所有日期" && !examDate.isEmpty()) {
+        title += QString(" (%1)").arg(examDate);
+    }
+    chart->setTitle(title);
 
     QBarSeries *series = new QBarSeries();
     QBarSet *set = new QBarSet("人数分布");
@@ -536,7 +634,9 @@ void MainWindow::showHistogramChart(const QString &className, const QString &cou
     ui->chartViewHistogram->setChart(chart);
 }
 
-void MainWindow::showTrendChart(const QString &className, const QString &course)
+// 修改：简化趋势图表函数，使用具体日期点
+void MainWindow::showTrendChart(const QString &className, const QString &course,
+                                const QString &examDate)
 {
     // 检查是否选择了课程
     if (course == "所有课程" || course.isEmpty()) {
@@ -550,7 +650,8 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
     // 从数据库获取课程平均成绩趋势数据
     QList<QMap<QString, QVariant>> trendData = DatabaseManager::instance()->getCourseTrendData(
         className == "所有班级" ? "" : className,
-        course
+        course,
+        examDate == "所有日期" ? "" : examDate
         );
 
     if (trendData.isEmpty()) {
@@ -565,7 +666,14 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
 
     // 创建图表
     QChart *chart = new QChart();
-    chart->setTitle(QString("%1 成绩趋势 - %2").arg(course).arg(className));
+
+    // 构建标题
+    QString title = QString("%1 成绩趋势").arg(course);
+    if (className != "所有班级") title += " - " + className;
+    if (examDate != "所有日期" && !examDate.isEmpty()) {
+        title += QString(" (%1)").arg(examDate);
+    }
+    chart->setTitle(title);
 
     // 创建折线系列
     QLineSeries *series = new QLineSeries();
@@ -580,12 +688,12 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
 
     // 添加数据点到系列，同时收集日期和分数
     for (const auto &dataPoint : trendData) {
-        QDate examDate = dataPoint["date_obj"].toDate();
+        QDate examDateObj = dataPoint["date_obj"].toDate();
         double avgScore = dataPoint["score"].toDouble();
         int count = dataPoint["count"].toInt();
 
         // 添加日期到分类列表
-        dateCategories << examDate.toString("MM-dd");
+        dateCategories << examDateObj.toString("MM-dd");
 
         // 添加分数
         scores << avgScore;
@@ -594,7 +702,7 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
         int index = dateCategories.size() - 1;
         series->append(index, avgScore);
 
-        qDebug() << "趋势数据点[" << index << "]:" << examDate.toString("yyyy-MM-dd")
+        qDebug() << "趋势数据点[" << index << "]:" << examDateObj.toString("yyyy-MM-dd")
                  << "平均分:" << avgScore << "人数:" << count;
     }
 
@@ -651,11 +759,14 @@ void MainWindow::showTrendChart(const QString &className, const QString &course)
     ui->chartViewTrend->setChart(chart);
 }
 
-void MainWindow::showComparisonChart(const QString &className)
+// 修改：简化对比图表函数，使用具体日期点
+void MainWindow::showComparisonChart(const QString &className,
+                                     const QString &examDate)
 {
     // 从数据库获取实际课程对比数据
     QList<QMap<QString, QVariant>> comparisonData = DatabaseManager::instance()->getCourseComparison(
-        className == "所有班级" ? "" : className
+        className == "所有班级" ? "" : className,
+        examDate == "所有日期" ? "" : examDate
         );
 
     if (comparisonData.isEmpty()) {
@@ -667,7 +778,14 @@ void MainWindow::showComparisonChart(const QString &className)
     }
 
     QChart *chart = new QChart();
-    chart->setTitle(QString("课程平均分对比 - %1").arg(className));
+
+    // 构建标题
+    QString title = "课程平均分对比";
+    if (className != "所有班级") title += " - " + className;
+    if (examDate != "所有日期" && !examDate.isEmpty()) {
+        title += QString(" (%1)").arg(examDate);
+    }
+    chart->setTitle(title);
 
     // 使用柱状图显示课程对比
     QBarSeries *series = new QBarSeries();
@@ -697,7 +815,7 @@ void MainWindow::showComparisonChart(const QString &className)
     // 设置Y轴
     QValueAxis *axisY = new QValueAxis();
     axisY->setTitleText("平均分");
-    axisY->setRange(0, 100); // 成绩范围0-100
+    axisY->setRange(0, 150); // 成绩范围0-150
     chart->addAxis(axisY, Qt::AlignLeft);
     series->attachAxis(axisY);
 
@@ -740,70 +858,33 @@ void MainWindow::clearForm()
     ui->tableView->clearSelection();
 }
 
-void MainWindow::refreshFilterCombos()
-{
-    QStringList classes = DatabaseManager::instance()->getAllClasses();
-    QStringList courses = DatabaseManager::instance()->getAllCourses();
-
-    ui->comboFilterClass->clear();
-    ui->comboFilterClass->addItems(classes);
-
-    ui->comboFilterCourse->clear();
-    ui->comboFilterCourse->addItems(courses);
-
-    ui->comboStatsClass->clear();
-    ui->comboStatsClass->addItems(classes);
-
-    ui->comboStatsCourse->clear();
-    ui->comboStatsCourse->addItems(courses);
-
-    // 如果班级下拉框为空，添加默认选项
-    if (ui->comboClass->count() == 0) {
-        ui->comboClass->addItems(QStringList() << "2023级1班" << "2023级2班" << "2023级3班"
-                                               << "2024级1班" << "2024级2班" << "2024级3班");
-    }
-
-    // 如果课程下拉框为空，添加默认选项
-    if (ui->comboCourse->count() == 0) {
-        ui->comboCourse->addItems(QStringList() << "数学" << "语文" << "英语" << "物理" << "化学" << "生物");
-    }
-}
-
+// 修改：更新文本搜索函数
 void MainWindow::on_editSearch_textChanged(const QString &text)
 {
-    QString className = ui->comboFilterClass->currentText();
-    QString course = ui->comboFilterCourse->currentText();
-
-    m_scoreModel->filterData(
-        className == "所有班级" ? "" : className,
-        course == "所有课程" ? "" : course,
-        text
-        );
-    ui->labelRecordCount->setText(QString("筛选记录数: %1").arg(m_scoreModel->rowCount()));
+    Q_UNUSED(text);
+    updateDataFilter();
 }
 
 void MainWindow::on_comboFilterClass_currentTextChanged(const QString &text)
 {
     Q_UNUSED(text);
-    on_editSearch_textChanged(ui->editSearch->text());
+    updateDataFilter();
 }
 
 void MainWindow::on_comboFilterCourse_currentTextChanged(const QString &text)
 {
     Q_UNUSED(text);
-    on_editSearch_textChanged(ui->editSearch->text());
+    updateDataFilter();
 }
 
 void MainWindow::on_comboStatsClass_currentTextChanged(const QString &text)
 {
     Q_UNUSED(text);
-    // 可以在这里添加动态更新统计图表的逻辑
 }
 
 void MainWindow::on_comboStatsCourse_currentTextChanged(const QString &text)
 {
     Q_UNUSED(text);
-    // 可以在这里添加动态更新统计图表的逻辑
 }
 
 void MainWindow::updateStatusBar(const QString &message)
@@ -825,28 +906,32 @@ void MainWindow::generateReport()
 
     QString className = ui->comboStatsClass->currentText();
     QString course = ui->comboStatsCourse->currentText();
+    QString examDate = ui->comboStatsDate->currentText();
 
     QMap<QString, QVariant> stats = DatabaseManager::instance()->calculateStatistics(
         className == "所有班级" ? "" : className,
-        course == "所有课程" ? "" : course
+        course == "所有课程" ? "" : course,
+        examDate == "所有日期" ? "" : examDate
         );
 
     QString report = QString(
                          "========== 学生成绩分析报告 ==========\n\n"
                          "班级: %1\n"
-                         "课程: %2\n\n"
+                         "课程: %2\n"
+                         "考试日期: %3\n\n"
                          "========== 统计结果 ==========\n"
-                         "平均分: %3\n"
-                         "最高分: %4\n"
-                         "最低分: %5\n"
-                         "标准差: %6\n"
-                         "及格率: %7%%\n"
-                         "学生人数: %8\n\n"
-                         "生成时间: %9\n"
-                         "数据库路径: %10\n"
+                         "平均分: %4\n"
+                         "最高分: %5\n"
+                         "最低分: %6\n"
+                         "标准差: %7\n"
+                         "及格率: %8%%\n"
+                         "学生人数: %9\n\n"
+                         "生成时间: %10\n"
+                         "数据库路径: %11\n"
                          "================================="
                          ).arg(className == "所有班级" ? "全部班级" : className)
                          .arg(course == "所有课程" ? "全部课程" : course)
+                         .arg(examDate == "所有日期" ? "全部日期" : examDate)
                          .arg(QString::number(stats["avg"].toDouble(), 'f', 2))
                          .arg(QString::number(stats["max"].toDouble(), 'f', 2))
                          .arg(QString::number(stats["min"].toDouble(), 'f', 2))

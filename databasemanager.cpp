@@ -5,6 +5,7 @@
 #include <QMessageBox>
 #include <QApplication>
 #include <QDir>
+#include <QSet>  // 添加缺少的头文件
 
 DatabaseManager* DatabaseManager::m_instance = nullptr;
 
@@ -189,7 +190,9 @@ QList<StudentScore> DatabaseManager::getAllScores()
     return scores;
 }
 
-QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className, const QString &course, const QString &keyword)
+// 修改：简化筛选功能，只保留日期参数（具体日期点）
+QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className, const QString &course,
+                                                       const QString &examDate, const QString &keyword)
 {
     QList<StudentScore> scores;
     QString sql = "SELECT id, student_id, student_name, class_name, course, score, exam_date FROM scores WHERE 1=1";
@@ -200,6 +203,12 @@ QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className,
     if (!course.isEmpty() && course != "所有课程") {
         sql += " AND course = :course";
     }
+
+    // 修改：添加具体日期筛选
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        sql += " AND exam_date = :exam_date";
+    }
+
     if (!keyword.isEmpty()) {
         sql += " AND (student_id LIKE :keyword OR student_name LIKE :keyword)";
     }
@@ -214,6 +223,12 @@ QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className,
     if (!course.isEmpty() && course != "所有课程") {
         query.bindValue(":course", course);
     }
+
+    // 绑定日期参数
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        query.bindValue(":exam_date", examDate);
+    }
+
     if (!keyword.isEmpty()) {
         query.bindValue(":keyword", "%" + keyword + "%");
     }
@@ -235,10 +250,13 @@ QList<StudentScore> DatabaseManager::getScoresByFilter(const QString &className,
         scores.append(score);
     }
 
+    qDebug() << "筛选查询结果:" << scores.size() << "条记录";
     return scores;
 }
 
-QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &className, const QString &course)
+// 修改：简化统计功能，只保留日期参数（具体日期点）
+QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &className, const QString &course,
+                                                             const QString &examDate)
 {
     QMap<QString, QVariant> stats;
     QString sql = "SELECT "
@@ -256,6 +274,11 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
         sql += " AND course = :course";
     }
 
+    // 修改：添加具体日期筛选
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        sql += " AND exam_date = :exam_date";
+    }
+
     QSqlQuery query(m_database);
     query.prepare(sql);
 
@@ -264,6 +287,11 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
     }
     if (!course.isEmpty() && course != "所有课程") {
         query.bindValue(":course", course);
+    }
+
+    // 绑定日期参数
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        query.bindValue(":exam_date", examDate);
     }
 
     if (query.exec() && query.next()) {
@@ -289,6 +317,11 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
                 varianceSql += " AND course = :course";
             }
 
+            // 修改：添加具体日期筛选
+            if (!examDate.isEmpty() && examDate != "所有日期") {
+                varianceSql += " AND exam_date = :exam_date";
+            }
+
             QSqlQuery varianceQuery(m_database);
             varianceQuery.prepare(varianceSql);
             varianceQuery.bindValue(":avg", avg);
@@ -297,6 +330,11 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
             }
             if (!course.isEmpty() && course != "所有课程") {
                 varianceQuery.bindValue(":course", course);
+            }
+
+            // 绑定日期参数
+            if (!examDate.isEmpty() && examDate != "所有日期") {
+                varianceQuery.bindValue(":exam_date", examDate);
             }
 
             if (varianceQuery.exec() && varianceQuery.next()) {
@@ -313,7 +351,9 @@ QMap<QString, QVariant> DatabaseManager::calculateStatistics(const QString &clas
     return stats;
 }
 
-QList<QMap<QString, QVariant>> DatabaseManager::getScoreDistribution(const QString &className, const QString &course, int bins)
+// 修改：简化成绩分布功能，只保留日期参数（具体日期点）
+QList<QMap<QString, QVariant>> DatabaseManager::getScoreDistribution(const QString &className, const QString &course,
+                                                                     const QString &examDate, int bins)
 {
     QList<QMap<QString, QVariant>> distribution;
 
@@ -351,6 +391,11 @@ QList<QMap<QString, QVariant>> DatabaseManager::getScoreDistribution(const QStri
         sql += " AND course = :course";
     }
 
+    // 修改：添加具体日期筛选
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        sql += " AND exam_date = :exam_date";
+    }
+
     QSqlQuery query(m_database);
     query.prepare(sql);
 
@@ -359,6 +404,11 @@ QList<QMap<QString, QVariant>> DatabaseManager::getScoreDistribution(const QStri
     }
     if (!course.isEmpty() && course != "所有课程") {
         query.bindValue(":course", course);
+    }
+
+    // 绑定日期参数
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        query.bindValue(":exam_date", examDate);
     }
 
     // 初始化统计数组
@@ -397,102 +447,58 @@ QList<QMap<QString, QVariant>> DatabaseManager::getScoreDistribution(const QStri
     return distribution;
 }
 
-QList<QMap<QString, QVariant>> DatabaseManager::getTrendData(const QString &studentId, const QString &course)
+// 修改：简化趋势数据功能，只保留日期参数（具体日期点）
+QList<QMap<QString, QVariant>> DatabaseManager::getCourseTrendData(const QString &className, const QString &course,
+                                                                   const QString &examDate)
 {
     QList<QMap<QString, QVariant>> trendData;
 
-    QString sql = "SELECT exam_date, score FROM scores WHERE 1=1";
+    // 修改：如果指定了具体日期，则只返回该日期的数据
+    QString sql;
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        // 只查询指定日期的数据
+        sql = "SELECT exam_date, AVG(score) as avg_score, COUNT(*) as count "
+              "FROM scores WHERE 1=1";
 
-    if (!studentId.isEmpty()) {
-        sql += " AND student_id = :student_id";
-    }
-    if (!course.isEmpty() && course != "所有课程") {
-        sql += " AND course = :course";
-    }
-
-    sql += " ORDER BY exam_date ASC";
-
-    QSqlQuery query(m_database);
-    query.prepare(sql);
-
-    if (!studentId.isEmpty()) {
-        query.bindValue(":student_id", studentId);
-    }
-    if (!course.isEmpty() && course != "所有课程") {
-        query.bindValue(":course", course);
-    }
-
-    if (query.exec()) {
-        while (query.next()) {
-            QMap<QString, QVariant> dataPoint;
-            QDate examDate = QDate::fromString(query.value(0).toString(), "yyyy-MM-dd");
-            double score = query.value(1).toDouble();
-
-            dataPoint["date"] = examDate.toString("yyyy-MM-dd");
-            dataPoint["score"] = score;
-            dataPoint["date_obj"] = examDate;
-
-            trendData.append(dataPoint);
+        if (!className.isEmpty() && className != "所有班级") {
+            sql += " AND class_name = :class_name";
         }
+        if (!course.isEmpty() && course != "所有课程") {
+            sql += " AND course = :course";
+        }
+        sql += " AND exam_date = :exam_date "
+               "GROUP BY exam_date ORDER BY exam_date ASC";
     } else {
-        qDebug() << "获取趋势数据错误:" << query.lastError().text();
+        // 查询所有日期的趋势数据
+        sql = "SELECT exam_date, AVG(score) as avg_score, COUNT(*) as count "
+              "FROM scores WHERE 1=1";
+
+        if (!className.isEmpty() && className != "所有班级") {
+            sql += " AND class_name = :class_name";
+        }
+        if (!course.isEmpty() && course != "所有课程") {
+            sql += " AND course = :course";
+        }
+        sql += " GROUP BY exam_date ORDER BY exam_date ASC";
     }
-
-    return trendData;
-}
-
-// 获取课程趋势数据（按考试日期分组，使用 DISTINCT 确保日期唯一）
-QList<QMap<QString, QVariant>> DatabaseManager::getCourseTrendData(const QString &className, const QString &course)
-{
-    QList<QMap<QString, QVariant>> trendData;
-
-    QString sql = "SELECT DISTINCT exam_date, "
-                  "(SELECT AVG(score) FROM scores s2 WHERE s2.exam_date = s1.exam_date ";
-
-    if (!className.isEmpty() && className != "所有班级") {
-        sql += " AND s2.class_name = :class_name";
-    }
-    if (!course.isEmpty() && course != "所有课程") {
-        sql += " AND s2.course = :course";
-    }
-    sql += ") as avg_score, ";
-
-    sql += "(SELECT COUNT(*) FROM scores s3 WHERE s3.exam_date = s1.exam_date ";
-    if (!className.isEmpty() && className != "所有班级") {
-        sql += " AND s3.class_name = :class_name2";
-    }
-    if (!course.isEmpty() && course != "所有课程") {
-        sql += " AND s3.course = :course2";
-    }
-    sql += ") as count ";
-
-    sql += "FROM scores s1 WHERE 1=1";
-
-    if (!className.isEmpty() && className != "所有班级") {
-        sql += " AND s1.class_name = :class_name3";
-    }
-    if (!course.isEmpty() && course != "所有课程") {
-        sql += " AND s1.course = :course3";
-    }
-
-    sql += " GROUP BY exam_date ORDER BY exam_date ASC";
 
     QSqlQuery query(m_database);
     query.prepare(sql);
 
     if (!className.isEmpty() && className != "所有班级") {
         query.bindValue(":class_name", className);
-        query.bindValue(":class_name2", className);
-        query.bindValue(":class_name3", className);
     }
     if (!course.isEmpty() && course != "所有课程") {
         query.bindValue(":course", course);
-        query.bindValue(":course2", course);
-        query.bindValue(":course3", course);
+    }
+
+    // 绑定日期参数
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        query.bindValue(":exam_date", examDate);
     }
 
     if (query.exec()) {
-        QSet<QString> uniqueDates; // 用于检查日期唯一性
+        QSet<QString> uniqueDates;
         while (query.next()) {
             QDate examDate = QDate::fromString(query.value(0).toString(), "yyyy-MM-dd");
             double avgScore = query.value(1).toDouble();
@@ -500,7 +506,6 @@ QList<QMap<QString, QVariant>> DatabaseManager::getCourseTrendData(const QString
 
             QString dateStr = examDate.toString("yyyy-MM-dd");
 
-            // 检查日期是否已存在
             if (!uniqueDates.contains(dateStr) && avgScore > 0) {
                 uniqueDates.insert(dateStr);
 
@@ -513,7 +518,7 @@ QList<QMap<QString, QVariant>> DatabaseManager::getCourseTrendData(const QString
                 trendData.append(dataPoint);
             }
         }
-        qDebug() << "获取课程趋势数据成功，共" << trendData.size() << "条唯一记录";
+        qDebug() << "获取课程趋势数据成功，共" << trendData.size() << "条记录";
     } else {
         qDebug() << "获取课程趋势数据错误:" << query.lastError().text();
     }
@@ -521,7 +526,9 @@ QList<QMap<QString, QVariant>> DatabaseManager::getCourseTrendData(const QString
     return trendData;
 }
 
-QList<QMap<QString, QVariant>> DatabaseManager::getCourseComparison(const QString &className)
+// 修改：简化课程对比功能，只保留日期参数（具体日期点）
+QList<QMap<QString, QVariant>> DatabaseManager::getCourseComparison(const QString &className,
+                                                                    const QString &examDate)
 {
     QList<QMap<QString, QVariant>> comparisonData;
 
@@ -531,6 +538,11 @@ QList<QMap<QString, QVariant>> DatabaseManager::getCourseComparison(const QStrin
         sql += " AND class_name = :class_name";
     }
 
+    // 修改：添加具体日期筛选
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        sql += " AND exam_date = :exam_date";
+    }
+
     sql += " GROUP BY course ORDER BY avg_score DESC";
 
     QSqlQuery query(m_database);
@@ -538,6 +550,11 @@ QList<QMap<QString, QVariant>> DatabaseManager::getCourseComparison(const QStrin
 
     if (!className.isEmpty() && className != "所有班级") {
         query.bindValue(":class_name", className);
+    }
+
+    // 绑定日期参数
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        query.bindValue(":exam_date", examDate);
     }
 
     if (query.exec()) {
@@ -592,6 +609,25 @@ QStringList DatabaseManager::getAllCourses()
     return courses;
 }
 
+// 修改：新增获取所有考试日期函数
+QStringList DatabaseManager::getAllExamDates()
+{
+    QStringList examDates;
+    QSqlQuery query(m_database);
+    query.prepare("SELECT DISTINCT exam_date FROM scores ORDER BY exam_date DESC");
+
+    if (query.exec()) {
+        examDates << "所有日期";
+        while (query.next()) {
+            QString dateStr = query.value(0).toString();
+            examDates << dateStr;
+        }
+    }
+
+    qDebug() << "获取到" << examDates.size() << "个考试日期";
+    return examDates;
+}
+
 QStringList DatabaseManager::getAllStudents()
 {
     QStringList students;
@@ -609,6 +645,7 @@ QStringList DatabaseManager::getAllStudents()
     return students;
 }
 
+// 导入导出函数（注意：这些函数在databasemanager.h中已声明）
 bool DatabaseManager::importFromCSV(const QString &filePath)
 {
     QFile file(filePath);
@@ -656,9 +693,14 @@ bool DatabaseManager::importFromCSV(const QString &filePath)
 
 bool DatabaseManager::importFromExcel(const QString &filePath)
 {
-    // 这里需要安装额外的库来处理Excel文件
-    // 暂时先返回false，或调用CSV导入
+    // Excel导入需要额外库支持，这里只显示提示
+    qDebug() << "Excel导入功能需要额外安装库支持，请使用CSV格式导入";
+
+// 在GUI应用程序中显示消息框
+#ifndef QT_NO_MESSAGEBOX
     QMessageBox::information(nullptr, "提示", "Excel导入功能需要额外安装库支持，请使用CSV格式导入");
+#endif
+
     return false;
 }
 

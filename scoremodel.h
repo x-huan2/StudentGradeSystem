@@ -20,7 +20,12 @@ public:
 
     // 自定义方法
     void refreshData();
-    void filterData(const QString& className, const QString& course, const QString& keyword = "");
+
+    // 修改：简化筛选功能，只保留日期参数（具体日期点）
+    void filterData(const QString& className, const QString& course,
+                    const QString& examDate = "",
+                    const QString& keyword = "");
+
     StudentScore getScoreAt(int row) const;
 
 private:

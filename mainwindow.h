@@ -37,7 +37,11 @@ private slots:
     void on_comboStatsClass_currentTextChanged(const QString &text);
     void on_comboStatsCourse_currentTextChanged(const QString &text);
 
-    // 菜单动作槽函数 - 新增
+    // 修改：日期筛选槽函数改为下拉框
+    void on_comboFilterDate_currentTextChanged(const QString &text);
+    void on_comboStatsDate_currentTextChanged(const QString &text);
+
+    // 菜单动作槽函数
     void on_actionImport_triggered();
     void on_actionExport_triggered();
     void on_actionExit_triggered();
@@ -49,7 +53,6 @@ private slots:
     void on_actionCharts_triggered();
     void on_actionReports_triggered();
     void on_actionAbout_triggered();
-
 
 private:
     Ui::MainWindow *ui;
@@ -63,10 +66,17 @@ private:
     void clearForm();
     void updateStatusBar(const QString &message);
 
+    // 修改：更新筛选函数，去掉日期范围参数
+    void updateDataFilter();
+    void updateStatisticsFilter();
+
     void showDefaultCharts();
-    void showHistogramChart(const QString& className, const QString& course);
-    void showTrendChart(const QString& className, const QString& course);
-    void showComparisonChart(const QString& className);
+    void showHistogramChart(const QString& className, const QString& course,
+                            const QString& examDate = "");
+    void showTrendChart(const QString& className, const QString& course,
+                        const QString& examDate = "");
+    void showComparisonChart(const QString& className,
+                             const QString& examDate = "");
 
     void generateReport();
 };

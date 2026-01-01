@@ -35,26 +35,37 @@ public:
     bool updateScore(int id, const StudentScore& score);
     bool deleteScore(int id);
     QList<StudentScore> getAllScores();
-    QList<StudentScore> getScoresByFilter(const QString& className, const QString& course, const QString& keyword = "");
 
-    // 统计功能
-    QMap<QString, QVariant> calculateStatistics(const QString& className, const QString& course);
-    QList<QMap<QString, QVariant>> getScoreDistribution(const QString& className, const QString& course, int bins = 5);
-    QList<QMap<QString, QVariant>> getTrendData(const QString& studentId, const QString& course);
-    QList<QMap<QString, QVariant>> getCourseTrendData(const QString& className, const QString& course); // 新增函数
-    QList<QMap<QString, QVariant>> getCourseComparison(const QString& className);
+    // 修改：简化筛选功能，只保留日期参数（具体日期点）
+    QList<StudentScore> getScoresByFilter(const QString& className, const QString& course,
+                                          const QString& examDate = "",
+                                          const QString& keyword = "");
+
+    // 统计功能 - 简化，只保留日期参数（具体日期点）
+    QMap<QString, QVariant> calculateStatistics(const QString& className, const QString& course,
+                                                const QString& examDate = "");
+    QList<QMap<QString, QVariant>> getScoreDistribution(const QString& className, const QString& course,
+                                                        const QString& examDate = "",
+                                                        int bins = 5);
+    QList<QMap<QString, QVariant>> getCourseTrendData(const QString& className, const QString& course,
+                                                      const QString& examDate = "");
+    QList<QMap<QString, QVariant>> getCourseComparison(const QString& className,
+                                                       const QString& examDate = "");
 
     // 获取唯一值列表
     QStringList getAllClasses();
     QStringList getAllCourses();
     QStringList getAllStudents();
 
-    // 批量导入
+    // 修改：获取考试日期列表
+    QStringList getAllExamDates();
+
+    // 新增：导入导出功能
     bool importFromCSV(const QString& filePath);
     bool importFromExcel(const QString& filePath);
     bool exportToCSV(const QString& filePath);
 
-    // 测试数据库连接
+    // 新增：数据库状态检查
     bool isDatabaseConnected() const;
     QString getDatabasePath() const;
 

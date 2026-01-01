@@ -84,10 +84,12 @@ void ScoreModel::refreshData()
     endResetModel();
 }
 
-void ScoreModel::filterData(const QString &className, const QString &course, const QString &keyword)
+// 修改：简化筛选功能，只保留日期参数（具体日期点）
+void ScoreModel::filterData(const QString &className, const QString &course,
+                            const QString &examDate, const QString &keyword)
 {
     beginResetModel();
-    m_scores = DatabaseManager::instance()->getScoresByFilter(className, course, keyword);
+    m_scores = DatabaseManager::instance()->getScoresByFilter(className, course, examDate, keyword);
     endResetModel();
 }
 

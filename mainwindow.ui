@@ -229,6 +229,15 @@
               </widget>
              </item>
              <item>
+              <widget class="QComboBox" name="comboFilterDate">
+               <item>
+                <property name="text">
+                 <string>所有日期</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item>
               <widget class="QLineEdit" name="editSearch">
                <property name="placeholderText">
                 <string>搜索学号或姓名...</string>
@@ -321,6 +330,22 @@
              <item>
               <property name="text">
                <string>所有课程</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="labelStatsDate">
+             <property name="text">
+              <string>考试日期:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboStatsDate">
+             <item>
+              <property name="text">
+               <string>所有日期</string>
               </property>
              </item>
             </widget>
