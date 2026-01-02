@@ -88,12 +88,12 @@
             <widget class="QComboBox" name="comboCourse">
              <item>
               <property name="text">
-               <string>语文</string>
+               <string>数学</string>
               </property>
              </item>
              <item>
               <property name="text">
-               <string>数学</string>
+               <string>语文</string>
               </property>
              </item>
              <item>
@@ -108,11 +108,6 @@
              </item>
              <item>
               <property name="text">
-               <string>历史</string>
-              </property>
-             </item>
-             <item>
-              <property name="text">
                <string>化学</string>
               </property>
              </item>
@@ -123,12 +118,17 @@
              </item>
              <item>
               <property name="text">
-               <string>地理</string>
+               <string>历史</string>
               </property>
              </item>
              <item>
               <property name="text">
                <string>政治</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>地理</string>
               </property>
              </item>
             </widget>
@@ -246,6 +246,13 @@
                  <string>所有课程</string>
                 </property>
                </item>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="labelDate">
+               <property name="text">
+                <string>考试日期:</string>
+               </property>
               </widget>
              </item>
              <item>
@@ -368,6 +375,73 @@
                <string>所有日期</string>
               </property>
              </item>
+            </widget>
+           </item>
+           <item>
+            <spacer name="verticalSpacer_2">
+             <property name="orientation">
+              <enum>Qt::Orientation::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QLabel" name="labelRankingTitle">
+             <property name="text">
+              <string>排名分析选项</string>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold;</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="labelRankingType">
+             <property name="text">
+              <string>排名类型:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboRankingType">
+             <item>
+              <property name="text">
+               <string>单科成绩排名</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>总分成绩排名</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="labelRankingCourse">
+             <property name="text">
+              <string>排名课程:</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboRankingCourse">
+             <item>
+              <property name="text">
+               <string>所有课程</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnShowRanking">
+             <property name="text">
+              <string>显示排名</string>
+             </property>
             </widget>
            </item>
            <item>
@@ -525,6 +599,29 @@
            <layout class="QVBoxLayout" name="verticalLayout_8">
             <item>
              <widget class="QChartView" name="chartViewComparison" native="true"/>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tabChart4">
+           <attribute name="title">
+            <string>排名分析</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_9">
+            <item>
+             <widget class="QSplitter" name="splitter">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <widget class="QTableView" name="tableViewRanking">
+               <property name="alternatingRowColors">
+                <bool>true</bool>
+               </property>
+               <property name="selectionBehavior">
+                <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+               </property>
+              </widget>
+              <widget class="QChartView" name="chartViewRanking" native="true"/>
+             </widget>
             </item>
            </layout>
           </widget>

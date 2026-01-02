@@ -16,11 +16,16 @@
 #include <QTextDocument>
 #include <QDateTimeAxis>
 #include <QDateTime>
+#include <QStandardItem>
+#include <QSplitter>
+#include <QBrush>
+#include <QColor>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , m_scoreModel(new ScoreModel(this))
+    , m_rankingModel(new QStandardItemModel(this))  // 初始化排名模型
 {
     ui->setupUi(this);
 
@@ -60,6 +65,21 @@ void MainWindow::setupUI()
 
     // 设置默认日期为今天
     ui->dateExam->setDate(QDate::currentDate());
+
+    // 设置排名表格模型
+    ui->tableViewRanking->setModel(m_rankingModel);
+    ui->tableViewRanking->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui->tableViewRanking->setSelectionBehavior(QAbstractItemView::SelectRows);
+    setupRankingModel();
+
+    // 设置排名表格列宽
+    ui->tableViewRanking->setColumnWidth(0, 60);   // 排名
+    ui->tableViewRanking->setColumnWidth(1, 100);  // 学号
+    ui->tableViewRanking->setColumnWidth(2, 80);   // 姓名
+    ui->tableViewRanking->setColumnWidth(3, 100);  // 班级
+    ui->tableViewRanking->setColumnWidth(4, 80);   // 总分
+    ui->tableViewRanking->setColumnWidth(5, 80);   // 平均分
+    ui->tableViewRanking->setColumnWidth(6, 80);   // 科目数
 
     // 连接信号槽
     connect(ui->tableView->selectionModel(), &QItemSelectionModel::selectionChanged,
@@ -125,6 +145,7 @@ void MainWindow::setupCharts()
     ui->chartViewHistogram->setRenderHint(QPainter::Antialiasing);
     ui->chartViewTrend->setRenderHint(QPainter::Antialiasing);
     ui->chartViewComparison->setRenderHint(QPainter::Antialiasing);
+    ui->chartViewRanking->setRenderHint(QPainter::Antialiasing); // 新增
 
     // 设置默认图表
     showDefaultCharts();
@@ -146,6 +167,10 @@ void MainWindow::showDefaultCharts()
         QChart *emptyComparisonChart = new QChart();
         emptyComparisonChart->setTitle("暂无数据，请先添加成绩记录");
         ui->chartViewComparison->setChart(emptyComparisonChart);
+
+        QChart *emptyRankingChart = new QChart();
+        emptyRankingChart->setTitle("暂无数据，请先添加成绩记录");
+        ui->chartViewRanking->setChart(emptyRankingChart);
         return;
     }
 
@@ -168,89 +193,229 @@ void MainWindow::showDefaultCharts()
     ui->chartViewHistogram->setChart(histogramChart);
 }
 
-
-
-void MainWindow::on_comboFilterDate_currentTextChanged(const QString &text)
+// 设置排名模型
+void MainWindow::setupRankingModel()
 {
-    Q_UNUSED(text);
-    updateDataFilter();
+    m_rankingModel->clear();
+    QStringList headers;
+    headers << "排名" << "学号" << "姓名" << "班级" << "总分" << "平均分" << "科目数";
+    m_rankingModel->setHorizontalHeaderLabels(headers);
 }
 
-void MainWindow::on_comboStatsDate_currentTextChanged(const QString &text)
+// 更新排名表格
+void MainWindow::updateRankingTable(const QList<StudentRank>& rankingList)
 {
-    Q_UNUSED(text);
-    updateStatisticsFilter();
-}
+    m_rankingModel->setRowCount(rankingList.size());
 
+    for (int i = 0; i < rankingList.size(); i++) {
+        const StudentRank& rankInfo = rankingList[i];
 
-void MainWindow::updateDataFilter()
-{
-    QString className = ui->comboFilterClass->currentText();
-    QString course = ui->comboFilterCourse->currentText();
-    QString examDate = ui->comboFilterDate->currentText();
-    QString keyword = ui->editSearch->text();
+        // 排名
+        QStandardItem* rankItem = new QStandardItem(QString::number(rankInfo.rank));
+        rankItem->setTextAlignment(Qt::AlignCenter);
+        m_rankingModel->setItem(i, 0, rankItem);
 
-    m_scoreModel->filterData(
-        className == "所有班级" ? "" : className,
-        course == "所有课程" ? "" : course,
-        examDate == "所有日期" ? "" : examDate,
-        keyword
-        );
+        // 学号
+        QStandardItem* idItem = new QStandardItem(rankInfo.studentId);
+        m_rankingModel->setItem(i, 1, idItem);
 
-    int recordCount = m_scoreModel->rowCount();
-    ui->labelRecordCount->setText(QString("筛选记录数: %1").arg(recordCount));
+        // 姓名
+        QStandardItem* nameItem = new QStandardItem(rankInfo.studentName);
+        m_rankingModel->setItem(i, 2, nameItem);
+
+        // 班级
+        QStandardItem* classItem = new QStandardItem(rankInfo.className);
+        m_rankingModel->setItem(i, 3, classItem);
+
+        // 总分
+        QStandardItem* totalItem = new QStandardItem(QString::number(rankInfo.score, 'f', 2));
+        totalItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        m_rankingModel->setItem(i, 4, totalItem);
+
+        // 平均分
+        QStandardItem* avgItem = new QStandardItem(QString::number(rankInfo.avgScore, 'f', 2));
+        avgItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        m_rankingModel->setItem(i, 5, avgItem);
+
+        // 科目数
+        QStandardItem* countItem = new QStandardItem(QString::number(rankInfo.courseCount));
+        countItem->setTextAlignment(Qt::AlignCenter);
+        m_rankingModel->setItem(i, 6, countItem);
+
+        // 根据排名设置背景色
+        QBrush backgroundBrush;
+        if (rankInfo.rank == 1) {
+            backgroundBrush = QBrush(QColor(255, 255, 200)); // 第一名：金色
+        } else if (rankInfo.rank == 2) {
+            backgroundBrush = QBrush(QColor(230, 230, 230)); // 第二名：银色
+        } else if (rankInfo.rank == 3) {
+            backgroundBrush = QBrush(QColor(255, 200, 150)); // 第三名：铜色
+        } else if (rankInfo.rank <= 10) {
+            backgroundBrush = QBrush(QColor(220, 240, 255)); // 前10名：浅蓝色
+        }
+
+        if (backgroundBrush.style() != Qt::NoBrush) {
+            for (int col = 0; col < m_rankingModel->columnCount(); col++) {
+                QStandardItem* item = m_rankingModel->item(i, col);
+                if (item) {
+                    item->setBackground(backgroundBrush);
+                }
+            }
+        }
+    }
 
     // 更新状态栏
-    if (examDate != "所有日期" && !examDate.isEmpty()) {
-        updateStatusBar(QString("已筛选考试日期: %1，共%2条记录").arg(examDate).arg(recordCount));
+    if (!rankingList.isEmpty()) {
+        updateStatusBar(QString("已显示排名，共 %1 名学生").arg(rankingList.size()));
+    }
+}
+
+// 显示排名图表
+void MainWindow::showRankingChart(const QString &className, const QString &course,
+                                  const QString &examDate)
+{
+    // 检查是否有数据
+    if (m_scoreModel->rowCount() == 0) {
+        // 显示空图表提示
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle("暂无数据，请先添加成绩记录");
+        ui->chartViewRanking->setChart(emptyChart);
+        return;
+    }
+
+    // 根据排名类型获取数据
+    QString rankingType = ui->comboRankingType->currentText();
+    QList<StudentRank> rankingList;
+
+    if (rankingType == "单科成绩排名" && course != "所有课程" && !course.isEmpty()) {
+        rankingList = DatabaseManager::instance()->getSingleCourseRanking(
+            className == "所有班级" ? "" : className,
+            course,
+            examDate == "所有日期" ? "" : examDate
+            );
+    } else if (rankingType == "总分成绩排名") {
+        rankingList = DatabaseManager::instance()->getTotalScoreRanking(
+            className == "所有班级" ? "" : className,
+            examDate == "所有日期" ? "" : examDate
+            );
     } else {
-        updateStatusBar(QString("已筛选，共%1条记录").arg(recordCount));
+        // 如果没有选择具体课程，显示提示信息
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle("请选择排名类型或具体课程");
+        ui->chartViewRanking->setChart(emptyChart);
+
+        // 清空排名表格
+        m_rankingModel->setRowCount(0);
+        return;
     }
+
+    if (rankingList.isEmpty()) {
+        // 如果没有数据，显示空图表
+        QChart *emptyChart = new QChart();
+        emptyChart->setTitle("暂无排名数据");
+        ui->chartViewRanking->setChart(emptyChart);
+
+        // 清空排名表格
+        m_rankingModel->setRowCount(0);
+        return;
+    }
+
+    // 更新排名表格
+    updateRankingTable(rankingList);
+
+    // 创建柱状图显示前10名
+    QChart *chart = new QChart();
+
+    // 构建标题
+    QString title = QString("%1 - 前10名").arg(rankingType);
+    if (className != "所有班级") title += " - " + className;
+    if (rankingType == "单科成绩排名" && course != "所有课程") {
+        title += " (" + course + ")";
+    }
+    if (examDate != "所有日期" && !examDate.isEmpty()) {
+        title += QString(" (%1)").arg(examDate);
+    }
+    chart->setTitle(title);
+
+    // 只显示前10名
+    int displayCount = qMin(10, rankingList.size());
+
+    QBarSeries *series = new QBarSeries();
+    QBarSet *set = new QBarSet(rankingType == "单科成绩排名" ? "单科成绩" : "平均分");
+
+    QStringList categories;
+    for (int i = 0; i < displayCount; i++) {
+        const StudentRank& rankInfo = rankingList[i];
+        categories << QString("%1\n%2").arg(rankInfo.rank).arg(rankInfo.studentName);
+
+        double score = rankingType == "单科成绩排名" ? rankInfo.score : rankInfo.avgScore;
+        *set << score;
+    }
+
+    series->append(set);
+    chart->addSeries(series);
+
+    // 设置X轴
+    QBarCategoryAxis *axisX = new QBarCategoryAxis();
+    axisX->append(categories);
+    axisX->setTitleText("学生排名和姓名");
+    chart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    // 设置Y轴
+    QValueAxis *axisY = new QValueAxis();
+    axisY->setTitleText(rankingType == "单科成绩排名" ? "单科成绩" : "平均分");
+    axisY->setLabelFormat("%.1f");
+
+    // 设置Y轴范围
+    double maxScore = 0;
+    for (int i = 0; i < displayCount; i++) {
+        double score = rankingType == "单科成绩排名" ? rankingList[i].score : rankingList[i].avgScore;
+        if (score > maxScore) maxScore = score;
+    }
+    axisY->setRange(0, maxScore * 1.1); // 增加10%的边距
+
+    chart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    // 显示图例
+    chart->legend()->setVisible(true);
+    chart->legend()->setAlignment(Qt::AlignBottom);
+
+    ui->chartViewRanking->setChart(chart);
 }
 
-void MainWindow::updateStatisticsFilter()
+// 排名类型选择变化槽函数
+void MainWindow::on_comboRankingType_currentIndexChanged(int index)
 {
-    // 统计筛选无需特殊处理，只更新UI
+    Q_UNUSED(index);
+
+    // 当选择单科排名时，启用课程下拉框；选择总分排名时，禁用课程下拉框
+    QString rankingType = ui->comboRankingType->currentText();
+    ui->comboRankingCourse->setEnabled(rankingType == "单科成绩排名");
+
+    // 自动更新排名
+    if (ui->tabWidgetCharts->currentIndex() == 3) { // 排名分析标签页
+        on_btnShowRanking_clicked();
+    }
 }
 
-
-void MainWindow::refreshFilterCombos()
+// 显示排名按钮点击槽函数
+void MainWindow::on_btnShowRanking_clicked()
 {
-    QStringList classes = DatabaseManager::instance()->getAllClasses();
-    QStringList courses = DatabaseManager::instance()->getAllCourses();
-    QStringList examDates = DatabaseManager::instance()->getAllExamDates();
-
-    ui->comboFilterClass->clear();
-    ui->comboFilterClass->addItems(classes);
-
-    ui->comboFilterCourse->clear();
-    ui->comboFilterCourse->addItems(courses);
-
-    ui->comboFilterDate->clear();
-    ui->comboFilterDate->addItems(examDates);
-
-    ui->comboStatsClass->clear();
-    ui->comboStatsClass->addItems(classes);
-
-    ui->comboStatsCourse->clear();
-    ui->comboStatsCourse->addItems(courses);
-
-    ui->comboStatsDate->clear();
-    ui->comboStatsDate->addItems(examDates);
-
-    // 如果班级下拉框为空，添加默认选项
-    if (ui->comboClass->count() == 0) {
-        ui->comboClass->addItems(QStringList() << "2023级1班" << "2023级2班" << "2023级3班"
-                                               << "2024级1班" << "2024级2班" << "2024级3班");
+    if (m_scoreModel->rowCount() == 0) {
+        QMessageBox::warning(this, "警告", "没有数据可以排名");
+        return;
     }
 
-    // 如果课程下拉框为空，添加默认选项
-    if (ui->comboCourse->count() == 0) {
-        ui->comboCourse->addItems(QStringList() << "数学" << "语文" << "英语" << "物理" << "化学" << "生物");
-    }
+    QString className = ui->comboStatsClass->currentText();
+    QString course = ui->comboRankingCourse->currentText();
+    QString examDate = ui->comboStatsDate->currentText();
+
+    showRankingChart(className, course, examDate);
 }
 
-// ==================== 菜单动作槽函数实现 ====================
+// 菜单动作槽函数实现
 
 void MainWindow::on_actionImport_triggered()
 {
@@ -544,6 +709,11 @@ void MainWindow::on_btnCalculateStats_clicked()
     showHistogramChart(className, course, examDate);
     showTrendChart(className, course, examDate);
     showComparisonChart(className, examDate);
+
+    // 新增：如果当前在排名标签页，更新排名
+    if (ui->tabWidgetCharts->currentIndex() == 3) { // 排名分析标签页
+        on_btnShowRanking_clicked();
+    }
 
     updateStatusBar("统计计算完成");
 }
@@ -878,6 +1048,90 @@ void MainWindow::on_comboStatsClass_currentTextChanged(const QString &text)
 void MainWindow::on_comboStatsCourse_currentTextChanged(const QString &text)
 {
     Q_UNUSED(text);
+}
+
+void MainWindow::on_comboFilterDate_currentTextChanged(const QString &text)
+{
+    Q_UNUSED(text);
+    updateDataFilter();
+}
+
+void MainWindow::on_comboStatsDate_currentTextChanged(const QString &text)
+{
+    Q_UNUSED(text);
+    updateStatisticsFilter();
+}
+
+void MainWindow::updateDataFilter()
+{
+    QString className = ui->comboFilterClass->currentText();
+    QString course = ui->comboFilterCourse->currentText();
+    QString examDate = ui->comboFilterDate->currentText();
+    QString keyword = ui->editSearch->text();
+
+    m_scoreModel->filterData(
+        className == "所有班级" ? "" : className,
+        course == "所有课程" ? "" : course,
+        examDate == "所有日期" ? "" : examDate,
+        keyword
+        );
+
+    int recordCount = m_scoreModel->rowCount();
+    ui->labelRecordCount->setText(QString("筛选记录数: %1").arg(recordCount));
+
+    // 更新状态栏
+    if (examDate != "所有日期" && !examDate.isEmpty()) {
+        updateStatusBar(QString("已筛选考试日期: %1，共%2条记录").arg(examDate).arg(recordCount));
+    } else {
+        updateStatusBar(QString("已筛选，共%1条记录").arg(recordCount));
+    }
+}
+
+void MainWindow::updateStatisticsFilter()
+{
+    // 统计筛选无需特殊处理，只更新UI
+}
+
+void MainWindow::refreshFilterCombos()
+{
+    QStringList classes = DatabaseManager::instance()->getAllClasses();
+    QStringList courses = DatabaseManager::instance()->getAllCourses();
+    QStringList examDates = DatabaseManager::instance()->getAllExamDates();
+
+    ui->comboFilterClass->clear();
+    ui->comboFilterClass->addItems(classes);
+
+    ui->comboFilterCourse->clear();
+    ui->comboFilterCourse->addItems(courses);
+
+    ui->comboFilterDate->clear();
+    ui->comboFilterDate->addItems(examDates);
+
+    ui->comboStatsClass->clear();
+    ui->comboStatsClass->addItems(classes);
+
+    ui->comboStatsCourse->clear();
+    ui->comboStatsCourse->addItems(courses);
+
+    // 新增：排名课程下拉框
+    ui->comboRankingCourse->clear();
+    ui->comboRankingCourse->addItems(courses);
+
+    ui->comboStatsDate->clear();
+    ui->comboStatsDate->addItems(examDates);
+
+    // 如果班级下拉框为空，添加默认选项
+    if (ui->comboClass->count() == 0) {
+        ui->comboClass->addItems(QStringList() << "2023级1班" << "2023级2班" << "2023级3班"
+                                               << "2024级1班" << "2024级2班" << "2024级3班");
+    }
+
+    // 如果课程下拉框为空，添加默认选项 - 增加生物、历史、政治、地理
+    if (ui->comboCourse->count() == 0) {
+        ui->comboCourse->addItems(QStringList()
+                                  << "数学" << "语文" << "英语" << "物理" << "化学"
+                                  << "生物" << "历史" << "政治" << "地理");
+    }
 }
 
 void MainWindow::updateStatusBar(const QString &message)

@@ -24,6 +24,17 @@ struct StudentScore {
     QDate examDate;
 };
 
+// 新增：学生排名信息结构体
+struct StudentRank {
+    QString studentId;
+    QString studentName;
+    QString className;
+    int rank;           // 排名
+    double score;       // 单科成绩或总分
+    double avgScore;    // 平均分
+    int courseCount;    // 科目数量
+};
+
 class DatabaseManager : public QObject
 {
     Q_OBJECT
@@ -51,6 +62,11 @@ public:
                                                       const QString& examDate = "");
     QList<QMap<QString, QVariant>> getCourseComparison(const QString& className,
                                                        const QString& examDate = "");
+
+    // 新增：分数排名功能
+    QList<StudentRank> getSingleCourseRanking(const QString& className, const QString& course,
+                                              const QString& examDate = "");
+    QList<StudentRank> getTotalScoreRanking(const QString& className, const QString& examDate = "");
 
     // 获取唯一值列表
     QStringList getAllClasses();

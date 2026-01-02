@@ -41,6 +41,10 @@ private slots:
     void on_comboFilterDate_currentTextChanged(const QString &text);
     void on_comboStatsDate_currentTextChanged(const QString &text);
 
+    // 新增：排名相关槽函数
+    void on_comboRankingType_currentIndexChanged(int index);
+    void on_btnShowRanking_clicked();
+
     // 菜单动作槽函数
     void on_actionImport_triggered();
     void on_actionExport_triggered();
@@ -57,6 +61,7 @@ private slots:
 private:
     Ui::MainWindow *ui;
     ScoreModel *m_scoreModel;
+    QStandardItemModel *m_rankingModel; // 新增：排名模型
 
     void setupUI();
     void setupDatabase();
@@ -77,6 +82,12 @@ private:
                         const QString& examDate = "");
     void showComparisonChart(const QString& className,
                              const QString& examDate = "");
+
+    // 新增：排名显示函数
+    void showRankingChart(const QString& className, const QString& course,
+                          const QString& examDate = "");
+    void setupRankingModel();
+    void updateRankingTable(const QList<StudentRank>& rankingList);
 
     void generateReport();
 };

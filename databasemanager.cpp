@@ -5,7 +5,7 @@
 #include <QMessageBox>
 #include <QApplication>
 #include <QDir>
-#include <QSet>
+#include <QSet>  // 添加缺少的头文件
 
 DatabaseManager* DatabaseManager::m_instance = nullptr;
 
@@ -736,4 +736,119 @@ bool DatabaseManager::isDatabaseConnected() const
 QString DatabaseManager::getDatabasePath() const
 {
     return m_database.databaseName();
+}
+
+// 获取单科成绩排名
+QList<StudentRank> DatabaseManager::getSingleCourseRanking(const QString &className, const QString &course,
+                                                           const QString &examDate)
+{
+    QList<StudentRank> rankingList;
+
+    if (course.isEmpty() || course == "所有课程") {
+        qDebug() << "请选择具体课程查看单科排名";
+        return rankingList;
+    }
+
+    QString sql = "SELECT student_id, student_name, class_name, score "
+                  "FROM scores WHERE course = :course";
+
+    if (!className.isEmpty() && className != "所有班级") {
+        sql += " AND class_name = :class_name";
+    }
+
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        sql += " AND exam_date = :exam_date";
+    }
+
+    sql += " ORDER BY score DESC";
+
+    QSqlQuery query(m_database);
+    query.prepare(sql);
+    query.bindValue(":course", course);
+
+    if (!className.isEmpty() && className != "所有班级") {
+        query.bindValue(":class_name", className);
+    }
+
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        query.bindValue(":exam_date", examDate);
+    }
+
+    if (query.exec()) {
+        int rank = 1;
+        while (query.next()) {
+            StudentRank rankInfo;
+            rankInfo.studentId = query.value(0).toString();
+            rankInfo.studentName = query.value(1).toString();
+            rankInfo.className = query.value(2).toString();
+            rankInfo.score = query.value(3).toDouble();
+            rankInfo.rank = rank;
+            rankInfo.avgScore = rankInfo.score; // 单科排名，平均分就是该科成绩
+            rankInfo.courseCount = 1;
+
+            rankingList.append(rankInfo);
+            rank++;
+        }
+
+        qDebug() << "获取单科排名成功，共" << rankingList.size() << "名学生";
+    } else {
+        qDebug() << "获取单科排名错误:" << query.lastError().text();
+    }
+
+    return rankingList;
+}
+
+// 获取总分成绩排名
+QList<StudentRank> DatabaseManager::getTotalScoreRanking(const QString &className, const QString &examDate)
+{
+    QList<StudentRank> rankingList;
+
+    QString sql = "SELECT student_id, student_name, class_name, "
+                  "AVG(score) as avg_score, COUNT(*) as course_count "
+                  "FROM scores WHERE 1=1";
+
+    if (!className.isEmpty() && className != "所有班级") {
+        sql += " AND class_name = :class_name";
+    }
+
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        sql += " AND exam_date = :exam_date";
+    }
+
+    sql += " GROUP BY student_id, student_name, class_name "
+           "ORDER BY avg_score DESC";
+
+    QSqlQuery query(m_database);
+    query.prepare(sql);
+
+    if (!className.isEmpty() && className != "所有班级") {
+        query.bindValue(":class_name", className);
+    }
+
+    if (!examDate.isEmpty() && examDate != "所有日期") {
+        query.bindValue(":exam_date", examDate);
+    }
+
+    if (query.exec()) {
+        int rank = 1;
+        while (query.next()) {
+            StudentRank rankInfo;
+            rankInfo.studentId = query.value(0).toString();
+            rankInfo.studentName = query.value(1).toString();
+            rankInfo.className = query.value(2).toString();
+            rankInfo.avgScore = query.value(3).toDouble();
+            rankInfo.courseCount = query.value(4).toInt();
+            rankInfo.score = rankInfo.avgScore * rankInfo.courseCount; // 计算总分
+            rankInfo.rank = rank;
+
+            rankingList.append(rankInfo);
+            rank++;
+        }
+
+        qDebug() << "获取总分排名成功，共" << rankingList.size() << "名学生";
+    } else {
+        qDebug() << "获取总分排名错误:" << query.lastError().text();
+    }
+
+    return rankingList;
 }
