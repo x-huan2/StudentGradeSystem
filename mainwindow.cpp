@@ -81,9 +81,20 @@ void MainWindow::setupUI()
     ui->tableViewRanking->setColumnWidth(5, 80);   // 平均分
     ui->tableViewRanking->setColumnWidth(6, 80);   // 科目数
 
+    // 初始隐藏排名分析相关控件
+    ui->labelRankingType->setVisible(false);
+    ui->comboRankingType->setVisible(false);
+    ui->labelRankingCourse->setVisible(false);
+    ui->comboRankingCourse->setVisible(false);
+    ui->btnShowRanking->setVisible(false);
+
     // 连接信号槽
     connect(ui->tableView->selectionModel(), &QItemSelectionModel::selectionChanged,
             this, &MainWindow::loadSelectedScoreToForm);
+
+    // 连接标签页切换信号
+    connect(ui->tabWidgetCharts, &QTabWidget::currentChanged,
+            this, &MainWindow::on_tabWidgetCharts_currentChanged);
 
     // 初始刷新
     refreshFilterCombos();
@@ -141,11 +152,12 @@ void MainWindow::setupDatabase()
 
 void MainWindow::setupCharts()
 {
-    // 初始化图表视图
+    // 初始化图表视图 - 只初始化前三个图表视图
     ui->chartViewHistogram->setRenderHint(QPainter::Antialiasing);
     ui->chartViewTrend->setRenderHint(QPainter::Antialiasing);
     ui->chartViewComparison->setRenderHint(QPainter::Antialiasing);
-    ui->chartViewRanking->setRenderHint(QPainter::Antialiasing); // 新增
+
+    // 注意：这里移除了对 chartViewRanking 和 splitter 的引用，因为它们已经在UI中被删除
 
     // 设置默认图表
     showDefaultCharts();
@@ -167,10 +179,6 @@ void MainWindow::showDefaultCharts()
         QChart *emptyComparisonChart = new QChart();
         emptyComparisonChart->setTitle("暂无数据，请先添加成绩记录");
         ui->chartViewComparison->setChart(emptyComparisonChart);
-
-        QChart *emptyRankingChart = new QChart();
-        emptyRankingChart->setTitle("暂无数据，请先添加成绩记录");
-        ui->chartViewRanking->setChart(emptyRankingChart);
         return;
     }
 
@@ -191,6 +199,31 @@ void MainWindow::showDefaultCharts()
     series->attachAxis(axisY);
 
     ui->chartViewHistogram->setChart(histogramChart);
+}
+
+// 标签页切换槽函数
+void MainWindow::on_tabWidgetCharts_currentChanged(int index)
+{
+    // 当切换到排名分析标签页（索引3）时，显示排名分析相关控件
+    bool showRankingControls = (index == 3);
+
+    // 显示/隐藏排名分析控件
+    ui->labelRankingType->setVisible(showRankingControls);
+    ui->comboRankingType->setVisible(showRankingControls);
+
+    // 只有当选择单科排名时才显示课程下拉框
+    bool showCourseCombo = showRankingControls &&
+                           (ui->comboRankingType->currentText() == "单科成绩排名");
+    ui->labelRankingCourse->setVisible(showCourseCombo);
+    ui->comboRankingCourse->setVisible(showCourseCombo);
+
+    ui->btnShowRanking->setVisible(showRankingControls);
+
+    // 如果是排名分析标签页，自动显示排名
+    if (index == 3) {
+        // 自动显示排名
+        on_btnShowRanking_clicked();
+    }
 }
 
 // 设置排名模型
@@ -270,16 +303,41 @@ void MainWindow::updateRankingTable(const QList<StudentRank>& rankingList)
     }
 }
 
-// 显示排名图表
-void MainWindow::showRankingChart(const QString &className, const QString &course,
+// 显示排名表格（删除图表，只显示表格）
+void MainWindow::showRankingTable(const QString &className, const QString &course,
                                   const QString &examDate)
 {
     // 检查是否有数据
     if (m_scoreModel->rowCount() == 0) {
-        // 显示空图表提示
-        QChart *emptyChart = new QChart();
-        emptyChart->setTitle("暂无数据，请先添加成绩记录");
-        ui->chartViewRanking->setChart(emptyChart);
+        // 清空排名表格
+        m_rankingModel->setRowCount(0);
+        // 在表格中显示提示信息
+        m_rankingModel->setRowCount(1);
+        QStandardItem* tipItem = new QStandardItem("暂无数据，请先添加成绩记录");
+        tipItem->setTextAlignment(Qt::AlignCenter);
+        m_rankingModel->setItem(0, 0, tipItem);
+        m_rankingModel->setItem(0, 1, new QStandardItem(""));
+        m_rankingModel->setItem(0, 2, new QStandardItem(""));
+        m_rankingModel->setItem(0, 3, new QStandardItem(""));
+        m_rankingModel->setItem(0, 4, new QStandardItem(""));
+        m_rankingModel->setItem(0, 5, new QStandardItem(""));
+        m_rankingModel->setItem(0, 6, new QStandardItem(""));
+        return;
+    }
+
+    // 检查是否选择了考试日期
+    if (examDate == "所有日期" || examDate.isEmpty()) {
+        // 清空排名表格并显示提示
+        m_rankingModel->setRowCount(1);
+        QStandardItem* tipItem = new QStandardItem("请选择考试日期");
+        tipItem->setTextAlignment(Qt::AlignCenter);
+        m_rankingModel->setItem(0, 0, tipItem);
+        m_rankingModel->setItem(0, 1, new QStandardItem(""));
+        m_rankingModel->setItem(0, 2, new QStandardItem(""));
+        m_rankingModel->setItem(0, 3, new QStandardItem(""));
+        m_rankingModel->setItem(0, 4, new QStandardItem(""));
+        m_rankingModel->setItem(0, 5, new QStandardItem(""));
+        m_rankingModel->setItem(0, 6, new QStandardItem(""));
         return;
     }
 
@@ -287,102 +345,56 @@ void MainWindow::showRankingChart(const QString &className, const QString &cours
     QString rankingType = ui->comboRankingType->currentText();
     QList<StudentRank> rankingList;
 
-    if (rankingType == "单科成绩排名" && course != "所有课程" && !course.isEmpty()) {
+    if (rankingType == "单科成绩排名") {
+        // 检查是否选择了课程
+        if (course == "所有课程" || course.isEmpty()) {
+            // 清空排名表格并显示提示
+            m_rankingModel->setRowCount(1);
+            QStandardItem* tipItem = new QStandardItem("请选择具体课程");
+            tipItem->setTextAlignment(Qt::AlignCenter);
+            m_rankingModel->setItem(0, 0, tipItem);
+            m_rankingModel->setItem(0, 1, new QStandardItem(""));
+            m_rankingModel->setItem(0, 2, new QStandardItem(""));
+            m_rankingModel->setItem(0, 3, new QStandardItem(""));
+            m_rankingModel->setItem(0, 4, new QStandardItem(""));
+            m_rankingModel->setItem(0, 5, new QStandardItem(""));
+            m_rankingModel->setItem(0, 6, new QStandardItem(""));
+            return;
+        }
+
         rankingList = DatabaseManager::instance()->getSingleCourseRanking(
             className == "所有班级" ? "" : className,
             course,
-            examDate == "所有日期" ? "" : examDate
+            examDate
             );
     } else if (rankingType == "总分成绩排名") {
         rankingList = DatabaseManager::instance()->getTotalScoreRanking(
             className == "所有班级" ? "" : className,
-            examDate == "所有日期" ? "" : examDate
+            examDate
             );
     } else {
-        // 如果没有选择具体课程，显示提示信息
-        QChart *emptyChart = new QChart();
-        emptyChart->setTitle("请选择排名类型或具体课程");
-        ui->chartViewRanking->setChart(emptyChart);
-
-        // 清空排名表格
+        // 清空表格
         m_rankingModel->setRowCount(0);
         return;
     }
 
+    // 如果没有数据，显示提示
     if (rankingList.isEmpty()) {
-        // 如果没有数据，显示空图表
-        QChart *emptyChart = new QChart();
-        emptyChart->setTitle("暂无排名数据");
-        ui->chartViewRanking->setChart(emptyChart);
-
-        // 清空排名表格
-        m_rankingModel->setRowCount(0);
+        m_rankingModel->setRowCount(1);
+        QStandardItem* tipItem = new QStandardItem("暂无排名数据");
+        tipItem->setTextAlignment(Qt::AlignCenter);
+        m_rankingModel->setItem(0, 0, tipItem);
+        m_rankingModel->setItem(0, 1, new QStandardItem(""));
+        m_rankingModel->setItem(0, 2, new QStandardItem(""));
+        m_rankingModel->setItem(0, 3, new QStandardItem(""));
+        m_rankingModel->setItem(0, 4, new QStandardItem(""));
+        m_rankingModel->setItem(0, 5, new QStandardItem(""));
+        m_rankingModel->setItem(0, 6, new QStandardItem(""));
         return;
     }
 
     // 更新排名表格
     updateRankingTable(rankingList);
-
-    // 创建柱状图显示前10名
-    QChart *chart = new QChart();
-
-    // 构建标题
-    QString title = QString("%1 - 前10名").arg(rankingType);
-    if (className != "所有班级") title += " - " + className;
-    if (rankingType == "单科成绩排名" && course != "所有课程") {
-        title += " (" + course + ")";
-    }
-    if (examDate != "所有日期" && !examDate.isEmpty()) {
-        title += QString(" (%1)").arg(examDate);
-    }
-    chart->setTitle(title);
-
-    // 只显示前10名
-    int displayCount = qMin(10, rankingList.size());
-
-    QBarSeries *series = new QBarSeries();
-    QBarSet *set = new QBarSet(rankingType == "单科成绩排名" ? "单科成绩" : "平均分");
-
-    QStringList categories;
-    for (int i = 0; i < displayCount; i++) {
-        const StudentRank& rankInfo = rankingList[i];
-        categories << QString("%1\n%2").arg(rankInfo.rank).arg(rankInfo.studentName);
-
-        double score = rankingType == "单科成绩排名" ? rankInfo.score : rankInfo.avgScore;
-        *set << score;
-    }
-
-    series->append(set);
-    chart->addSeries(series);
-
-    // 设置X轴
-    QBarCategoryAxis *axisX = new QBarCategoryAxis();
-    axisX->append(categories);
-    axisX->setTitleText("学生排名和姓名");
-    chart->addAxis(axisX, Qt::AlignBottom);
-    series->attachAxis(axisX);
-
-    // 设置Y轴
-    QValueAxis *axisY = new QValueAxis();
-    axisY->setTitleText(rankingType == "单科成绩排名" ? "单科成绩" : "平均分");
-    axisY->setLabelFormat("%.1f");
-
-    // 设置Y轴范围
-    double maxScore = 0;
-    for (int i = 0; i < displayCount; i++) {
-        double score = rankingType == "单科成绩排名" ? rankingList[i].score : rankingList[i].avgScore;
-        if (score > maxScore) maxScore = score;
-    }
-    axisY->setRange(0, maxScore * 1.1); // 增加10%的边距
-
-    chart->addAxis(axisY, Qt::AlignLeft);
-    series->attachAxis(axisY);
-
-    // 显示图例
-    chart->legend()->setVisible(true);
-    chart->legend()->setAlignment(Qt::AlignBottom);
-
-    ui->chartViewRanking->setChart(chart);
 }
 
 // 排名类型选择变化槽函数
@@ -394,6 +406,12 @@ void MainWindow::on_comboRankingType_currentIndexChanged(int index)
     QString rankingType = ui->comboRankingType->currentText();
     ui->comboRankingCourse->setEnabled(rankingType == "单科成绩排名");
 
+    // 更新显示状态
+    bool showCourseCombo = (ui->tabWidgetCharts->currentIndex() == 3) &&
+                           (rankingType == "单科成绩排名");
+    ui->labelRankingCourse->setVisible(showCourseCombo);
+    ui->comboRankingCourse->setVisible(showCourseCombo);
+
     // 自动更新排名
     if (ui->tabWidgetCharts->currentIndex() == 3) { // 排名分析标签页
         on_btnShowRanking_clicked();
@@ -403,16 +421,11 @@ void MainWindow::on_comboRankingType_currentIndexChanged(int index)
 // 显示排名按钮点击槽函数
 void MainWindow::on_btnShowRanking_clicked()
 {
-    if (m_scoreModel->rowCount() == 0) {
-        QMessageBox::warning(this, "警告", "没有数据可以排名");
-        return;
-    }
-
     QString className = ui->comboStatsClass->currentText();
     QString course = ui->comboRankingCourse->currentText();
     QString examDate = ui->comboStatsDate->currentText();
 
-    showRankingChart(className, course, examDate);
+    showRankingTable(className, course, examDate);
 }
 
 // 菜单动作槽函数实现

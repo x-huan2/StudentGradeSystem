@@ -45,6 +45,9 @@ private slots:
     void on_comboRankingType_currentIndexChanged(int index);
     void on_btnShowRanking_clicked();
 
+    // 新增：标签页切换槽函数
+    void on_tabWidgetCharts_currentChanged(int index);
+
     // 菜单动作槽函数
     void on_actionImport_triggered();
     void on_actionExport_triggered();
@@ -83,8 +86,8 @@ private:
     void showComparisonChart(const QString& className,
                              const QString& examDate = "");
 
-    // 新增：排名显示函数
-    void showRankingChart(const QString& className, const QString& course,
+    // 新增：排名显示函数 - 修改为只显示表格
+    void showRankingTable(const QString& className, const QString& course,
                           const QString& examDate = "");
     void setupRankingModel();
     void updateRankingTable(const QList<StudentRank>& rankingList);
